@@ -65,8 +65,8 @@
 <canvas id="c"></canvas>
 
 <div class="controls">
-  <label>text <input type="text" id="textInput" value="BERGER FÖHR "></label>
-  <label>size <input type="range" id="sizeRange" min="4" max="28" value="10"> <span id="sizeVal">10px</span></label>
+  <label>text <input type="text" id="textInput" value="STUDIO OS "></label>
+  <label>size <input type="range" id="sizeRange" min="4" max="28" value="4"> <span id="sizeVal">4px</span></label>
   <label>speed <input type="range" id="speedRange" min="1" max="20" value="6"> <span id="speedVal">6</span></label>
   <label><input type="checkbox" id="invertCheck"> invert</label>
   <button id="dlBtn">↓ png</button>
@@ -161,7 +161,7 @@ function getCharWidth(fontSize) {
 
 function draw() {
   const fontSize = parseInt(document.getElementById('sizeRange').value);
-  const text = document.getElementById('textInput').value || 'BERGER FÖHR ';
+  const text = document.getElementById('textInput').value || 'STUDIO OS ';
   const invert = document.getElementById('invertCheck').checked;
   const speed = parseInt(document.getElementById('speedRange').value);
 
