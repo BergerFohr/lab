@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B&F</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  canvas {
+    width: 75vw;
+    height: auto;
+    display: block;
+  }
+  .controls {
+    position: fixed;
+    bottom: 20px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    opacity: 0.3;
+    transition: opacity 0.3s;
+  }
+  .controls:hover { opacity: 1; }
+  label {
+    color: #888;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  input[type=range] { width: 80px; accent-color: #f2f2f2; }
+  input[type=text] {
+    background: transparent;
+    color: #f2f2f2;
+    border: 1px solid #333;
+    padding: 3px 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    width: 200px;
+  }
+  button {
+    background: transparent;
+    color: #888;
+    border: 1px solid #333;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+  }
+  button:hover { color: #f2f2f2; border-color: #666; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="controls">
+  <label>text <input type="text" id="textInput" value="BERGER FÖHR "></label>
+  <label>size <input type="range" id="sizeRange" min="4" max="28" value="10"> <span id="sizeVal">10px</span></label>
+  <label>speed <input type="range" id="speedRange" min="1" max="20" value="6"> <span id="speedVal">6</span></label>
+  <label><input type="checkbox" id="invertCheck"> invert</label>
+  <button id="dlBtn">↓ png</button>
+</div>
+
+<script>
+const SVG_SOURCE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 742 88">
+<g fill="#ffffff">
+  <circle cx="11" cy="33" r="11"/>
+  <path d="M55,66H11c-6.08,0-11,4.92-11,11s4.92,11,11,11h44c6.08,0,11-4.92,11-11s-4.92-11-11-11Z"/>
+  <path d="M77,0h-44C26.92,0,22,4.92,22,11s4.92,11,11,11h44c6.08,0,11-4.92,11-11S83.08,0,77,0Z"/>
+  <circle cx="77" cy="55" r="11"/>
+  <circle cx="44" cy="44" r="11"/>
+  <circle cx="142" cy="55" r="11"/>
+  <circle cx="142" cy="77" r="11"/>
+  <path d="M175,0h-66C102.92,0,98,4.92,98,11s4.92,11,11,11h33c-6.07,0-11,4.93-11,11s4.92,11,11,11,11-4.92,11-11-4.92-11-11-11h33c6.08,0,11-4.92,11-11S181.08,0,175,0Z"/>
+  <circle cx="207" cy="11" r="11"/>
+  <circle cx="207" cy="33" r="11"/>
+  <circle cx="207" cy="55" r="11"/>
+  <path d="M251,66h-22c-6.08,0-11,4.92-11,11s4.92,11,11,11h22c6.08,0,11-4.92,11-11s-4.92-11-11-11Z"/>
+  <circle cx="273" cy="11" r="11"/>
+  <circle cx="273" cy="33" r="11"/>
+  <circle cx="273" cy="55" r="11"/>
+  <path d="M316,33c0-6.07-4.92-11-11-11h44c6.08,0,11-4.92,11-11S355.08,0,349,0h-44c-6.08,0-11,4.92-11,11s4.92,11,11,11h0c-6.08,0-11,4.92-11,11s4.92,11,11,11,11-4.92,11-11Z"/>
+  <circle cx="305" cy="55" r="11"/>
+  <path d="M349,66h-44c-6.08,0-11,4.92-11,11s4.92,11,11,11h44c6.08,0,11-4.92,11-11s-4.92-11-11-11Z"/>
+  <circle cx="371" cy="33" r="11"/>
+  <circle cx="371" cy="55" r="11"/>
+  <path d="M469,0h-66c-6.08,0-11,4.92-11,11s4.92,11,11,11h33.05c-6.07,0-11,4.93-11,11s4.93,11,11,11,11-4.92,11-11-4.92-11-11-11h32.95c6.08,0,11-4.92,11-11S475.08,0,469,0Z"/>
+  <circle cx="436.05" cy="55" r="11"/>
+  <path d="M469,66h-66c-6.08,0-11,4.92-11,11s4.92,11,11,11h66c6.08,0,11-4.92,11-11s-4.92-11-11-11Z"/>
+  <circle cx="501" cy="33" r="11"/>
+  <circle cx="501" cy="55" r="11"/>
+  <path d="M523,22h22c6.08,0,11-4.92,11-11S551.08,0,545,0h-22c-6.08,0-11,4.92-11,11s4.92,11,11,11Z"/>
+  <path d="M545,66h-22c-6.08,0-11,4.92-11,11s4.92,11,11,11h22c6.08,0,11-4.92,11-11s-4.92-11-11-11Z"/>
+  <circle cx="567" cy="55" r="11"/>
+  <path d="M665,24c4.96,0,9,4.04,9,9s-4.04,9-9,9-9-4.04-9-9,4.04-9,9-9M665,22c-6.08,0-11,4.92-11,11s4.92,11,11,11,11-4.92,11-11-4.92-11-11-11h0Z"/>
+  <path d="M709,68c4.96,0,9,4.04,9,9s-4.04,9-9,9h-44c-4.96,0-9-4.04-9-9s4.04-9,9-9h44M709,66h-44c-6.08,0-11,4.92-11,11s4.92,11,11,11h44c6.08,0,11-4.92,11-11s-4.92-11-11-11h0Z"/>
+  <path d="M731,2c4.96,0,9,4.04,9,9s-4.04,9-9,9h-44c-4.96,0-9-4.04-9-9s4.04-9,9-9h44M731,0h-44c-6.08,0-11,4.92-11,11s4.92,11,11,11h44c6.08,0,11-4.92,11-11s-4.92-11-11-11h0Z"/>
+  <path d="M731,46c4.96,0,9,4.04,9,9s-4.04,9-9,9-9-4.04-9-9,4.04-9,9-9M731,44c-6.08,0-11,4.92-11,11s4.92,11,11,11,11-4.92,11-11-4.92-11-11-11h0Z"/>
+  <path d="M698,35c4.96,0,9,4.04,9,9s-4.04,9-9,9-9-4.04-9-9,4.04-9,9-9M698,33c-6.08,0-11,4.92-11,11s4.92,11,11,11,11-4.92,11-11-4.92-11-11-11h0Z"/>
+  <path d="M567,24c4.96,0,9,4.04,9,9s-4.04,9-9,9-9-4.04-9-9,4.04-9,9-9M567,22c-6.08,0-11,4.92-11,11s4.92,11,11,11,11-4.92,11-11-4.92-11-11-11h0Z"/>
+  <path d="M611,2c4.96,0,9,4.04,9,9s-4.04,9-9,9h-22c-4.96,0-9-4.04-9-9s4.04-9,9-9h22M611,0h-22c-6.08,0-11,4.92-11,11s4.92,11,11,11h22c6.08,0,11-4.92,11-11s-4.92-11-11-11h0Z"/>
+  <path d="M611,68c4.96,0,9,4.04,9,9s-4.04,9-9,9h-22c-4.96,0-9-4.04-9-9s4.04-9,9-9h22M611,66h-22c-6.08,0-11,4.92-11,11s4.92,11,11,11h22c6.08,0,11-4.92,11-11s-4.92-11-11-11h0Z"/>
+  <path d="M633,24c4.96,0,9,4.04,9,9s-4.04,9-9,9-9-4.04-9-9,4.04-9,9-9M633,22c-6.08,0-11,4.92-11,11s4.92,11,11,11,11-4.92,11-11-4.92-11-11-11h0Z"/>
+  <path d="M633,46c4.96,0,9,4.04,9,9s-4.04,9-9,9-9-4.04-9-9,4.04-9,9-9M633,44c-6.08,0-11,4.92-11,11s4.92,11,11,11,11-4.92,11-11-4.92-11-11-11h0Z"/>
+</g>
+</svg>`;
+
+const SVG_ASPECT = 88 / 742; // h/w
+
+let maskData = null;
+let maskW = 0, maskH = 0;
+let svgImg = null;
+let charOffset = 0;
+let frameCount = 0;
+let animId = null;
+let lastFontSize = null;
+let cachedCharWidth = null;
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// Pre-load SVG image
+function loadSVG() {
+  return new Promise((res, rej) => {
+    const blob = new Blob([SVG_SOURCE], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); res(img); };
+    img.onerror = rej;
+    img.src = url;
+  });
+}
+
+function buildMask(img, cw, ch) {
+  const mc = new OffscreenCanvas(cw, ch);
+  const mctx = mc.getContext('2d');
+  mctx.drawImage(img, 0, 0, cw, ch);
+  maskData = mctx.getImageData(0, 0, cw, ch).data;
+  maskW = cw;
+  maskH = ch;
+}
+
+function getCharWidth(fontSize) {
+  if (lastFontSize === fontSize && cachedCharWidth !== null) return cachedCharWidth;
+  ctx.font = `${fontSize}px "Courier New", monospace`;
+  cachedCharWidth = ctx.measureText('M').width;
+  lastFontSize = fontSize;
+  return cachedCharWidth;
+}
+
+function draw() {
+  const fontSize = parseInt(document.getElementById('sizeRange').value);
+  const text = document.getElementById('textInput').value || 'BERGER FÖHR ';
+  const invert = document.getElementById('invertCheck').checked;
+  const speed = parseInt(document.getElementById('speedRange').value);
+
+  const bg = invert ? '#f2f2f2' : '#000000';
+  const fg = invert ? '#000000' : '#f2f2f2';
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (!maskData) return;
+
+  const lineHeight = Math.round(fontSize * 1.3);
+  const charWidth = getCharWidth(fontSize);
+
+  ctx.fillStyle = fg;
+  ctx.font = `${fontSize}px "Courier New", monospace`;
+
+  const numRows = Math.ceil(maskH / lineHeight);
+  let totalCharsPlaced = 0;
+
+  for (let row = 0; row < numRows; row++) {
+    const scanY = Math.min(Math.floor(row * lineHeight + lineHeight * 0.5), maskH - 1);
+    const textY = row * lineHeight + fontSize;
+    let col = 0;
+
+    for (let x = 0; x < maskW; x += charWidth, col++) {
+      const px = Math.min(Math.floor(x), maskW - 1);
+      const dataIdx = (scanY * maskW + px) * 4;
+      const alpha = maskData[dataIdx + 3];
+
+      if (alpha > 64) {
+        const idx = (totalCharsPlaced + charOffset) % text.length;
+        ctx.fillText(text[idx], x, textY);
+        totalCharsPlaced++;
+      }
+    }
+  }
+
+  // Advance offset based on speed
+  frameCount++;
+  if (frameCount % Math.max(1, Math.round(12 / speed)) === 0) {
+    charOffset = (charOffset + 1) % text.length;
+  }
+
+  animId = requestAnimationFrame(draw);
+}
+
+function resize() {
+  if (!svgImg) return;
+  // Canvas pixel dimensions: base on a high-res internal size
+  // We'll use 2000px wide internally, CSS handles display size
+  const internalW = 2000;
+  const internalH = Math.round(internalW * SVG_ASPECT);
+
+  canvas.width = internalW;
+  canvas.height = internalH;
+
+  buildMask(svgImg, internalW, internalH);
+  lastFontSize = null; // invalidate cache
+}
+
+async function init() {
+  svgImg = await loadSVG();
+  resize();
+
+  window.addEventListener('resize', () => {
+    // No need to resize internal canvas, CSS handles responsiveness
+    // But rebuild mask if needed
+  });
+
+  // Controls
+  document.getElementById('sizeRange').addEventListener('input', function() {
+    document.getElementById('sizeVal').textContent = this.value + 'px';
+    lastFontSize = null;
+  });
+  document.getElementById('speedRange').addEventListener('input', function() {
+    document.getElementById('speedVal').textContent = this.value;
+  });
+  document.getElementById('invertCheck').addEventListener('change', () => {});
+
+  document.getElementById('dlBtn').addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.download = 'bf-text-art.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  });
+
+  draw();
+}
+
+init();
+</script>
+</body>
+</html>
