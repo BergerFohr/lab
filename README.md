@@ -6,6 +6,7 @@ Experiments, one-offs, and generative work from [Berger & Föhr](https://bergerf
 
 | Project | Description |
 |---|---|
+| [Bookclub Logo](./bookclub-logo/) | Interactive logotype prototype — Serif by default, Sans one letter at a time on hover |
 | [StudioOS.txt](./studioos-txt/) | Text-rendered logo — the B&F wordmark built entirely from repeating type |
 
 ---
