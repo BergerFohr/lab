@@ -105,39 +105,27 @@ function buildLogo() {
   svg.addEventListener("pointerleave", clearActiveIndex);
 }
 
-function centerOf(box) {
-  return {
-    x: box.x + box.width / 2,
-    y: box.y + box.height / 2
-  };
-}
-
 function measureLetters() {
   if (!svg || letters.length === 0) return;
 
-  const sansBoxes = [];
-
-  letters.forEach((letter) => {
-    const sansBox = letter.sans.getBBox();
+  const serifBoxes = letters.map((letter) => {
     const serifBox = letter.serif.getBBox();
-    const sansCenter = centerOf(sansBox);
-    const serifCenter = centerOf(serifBox);
-    const dx = sansCenter.x - serifCenter.x;
-    const dy = sansCenter.y - serifCenter.y;
 
-    letter.serif.setAttribute("transform", `translate(${dx.toFixed(3)} ${dy.toFixed(3)})`);
-    sansBoxes.push({
-      x: sansBox.x,
+    letter.serif.removeAttribute("transform");
+    letter.sans.removeAttribute("transform");
+
+    return {
+      x: serifBox.x,
       y: 0,
-      width: sansBox.width,
+      width: serifBox.width,
       height: 52.72
-    });
+    };
   });
 
   letters.forEach((letter, index) => {
-    const box = sansBoxes[index];
-    const previous = sansBoxes[index - 1];
-    const next = sansBoxes[index + 1];
+    const box = serifBoxes[index];
+    const previous = serifBoxes[index - 1];
+    const next = serifBoxes[index + 1];
     const left = previous ? (previous.x + previous.width + box.x) / 2 : box.x;
     const right = next ? (box.x + box.width + next.x) / 2 : box.x + box.width;
 
