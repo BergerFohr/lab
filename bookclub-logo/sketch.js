@@ -27,14 +27,13 @@ let svg;
 let layer;
 let activeIndex = -1;
 let mode = 1;
-let dynamicMix = 0;
-let dynamicTarget = 0;
 let dynamicEnergy = 0;
 let dynamicDirection = 1;
 let lastMoveX = 0;
 let lastMoveY = 0;
 let lastMoveTime = 0;
 let lastDynamicMoveTime = 0;
+let dynamicActiveIndex = -1;
 
 function setup() {
   noCanvas();
@@ -164,6 +163,10 @@ function pointInSvg(event) {
 
 function setActiveIndex(index) {
   if (mode !== 1 || index === activeIndex) return;
+  renderActiveIndex(index);
+}
+
+function renderActiveIndex(index) {
   activeIndex = index;
   letters.forEach((letter, letterIndex) => {
     letter.group.classList.toggle("is-swapped", letterIndex === activeIndex);
@@ -171,8 +174,7 @@ function setActiveIndex(index) {
 }
 
 function clearActiveIndex() {
-  activeIndex = -1;
-  letters.forEach((letter) => letter.group.classList.remove("is-swapped"));
+  renderActiveIndex(-1);
 }
 
 function hitTest(event) {
@@ -197,13 +199,10 @@ function setMode(nextMode) {
   clearActiveIndex();
 
   if (mode === 1) {
-    dynamicMix = 0;
-    dynamicTarget = 0;
     dynamicEnergy = 0;
-    letters.forEach((letter) => {
-      letter.sans.style.opacity = "";
-      letter.serif.style.opacity = "";
-    });
+    dynamicActiveIndex = -1;
+  } else {
+    lastDynamicMoveTime = 0;
   }
 }
 
@@ -220,7 +219,7 @@ function handleDynamicMove(event) {
   const speed = distance / dt;
 
   if (distance > 0.4) {
-    dynamicDirection = dx + dy >= 0 ? 1 : -1;
+    dynamicDirection = dx >= 0 ? 1 : -1;
     dynamicEnergy = Math.min(1, dynamicEnergy + 0.2 + speed * 0.9);
     lastDynamicMoveTime = now;
   } else {
@@ -231,27 +230,30 @@ function handleDynamicMove(event) {
   lastMoveX = x;
   lastMoveY = y;
   lastMoveTime = now;
+
+  const baseIndex = Math.floor((x / Math.max(1, window.innerWidth)) * letters.length);
+  const motionLead = speed > 0.75 ? dynamicDirection : 0;
+  const nextIndex = constrain(baseIndex + motionLead, 0, letters.length - 1);
+  setDynamicIndex(nextIndex);
+}
+
+function setDynamicIndex(index) {
+  if (index === dynamicActiveIndex) return;
+  dynamicActiveIndex = index;
+  renderActiveIndex(index);
 }
 
 function animateDynamicMode(now) {
   const idleMs = now - lastDynamicMoveTime;
 
-  if (lastDynamicMoveTime === 0) {
-    dynamicTarget = 0;
-  } else if (idleMs < 900) {
-    const pulse = (Math.sin(now * 0.0065 * dynamicDirection) + 1) / 2;
-    dynamicTarget = 0.08 + pulse * 0.84;
-  } else {
-    dynamicEnergy *= 0.94;
-    dynamicTarget = dynamicMix > 0.5 ? 0.03 : 0.97;
+  if (lastDynamicMoveTime === 0) return;
+
+  if (idleMs > 1300) {
+    dynamicEnergy = 0;
+    dynamicActiveIndex = -1;
+    clearActiveIndex();
+    return;
   }
 
-  const easing = 0.08 + dynamicEnergy * 0.18;
-  dynamicMix += (dynamicTarget - dynamicMix) * easing;
-  dynamicEnergy *= 0.975;
-
-  letters.forEach((letter) => {
-    letter.sans.style.opacity = (1 - dynamicMix).toFixed(3);
-    letter.serif.style.opacity = dynamicMix.toFixed(3);
-  });
+  dynamicEnergy *= 0.94;
 }
