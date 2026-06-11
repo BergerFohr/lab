@@ -74,24 +74,6 @@ function makeSvgElement(tag, attrs = {}) {
   return el;
 }
 
-function fitSansToSerifSlot(sansBox, serifBox) {
-  const scaleX = serifBox.width / sansBox.width;
-  const sourceCenterY = sansBox.y + sansBox.height / 2;
-  const targetCenterY = serifBox.y + serifBox.height / 2;
-  const translateX = serifBox.x - sansBox.x * scaleX;
-  const translateY = targetCenterY - sourceCenterY;
-
-  return [
-    "matrix(",
-    scaleX.toFixed(6),
-    " 0 0 1 ",
-    translateX.toFixed(6),
-    " ",
-    translateY.toFixed(6),
-    ")"
-  ].join("");
-}
-
 function buildLogo() {
   const stage = document.querySelector("#logo-stage");
   svg = makeSvgElement("svg", {
@@ -131,8 +113,6 @@ function measureLetters() {
     letter.sans.removeAttribute("transform");
 
     const serifBox = letter.serif.getBBox();
-    const sansBox = letter.sans.getBBox();
-    letter.sans.setAttribute("transform", fitSansToSerifSlot(sansBox, serifBox));
 
     return {
       x: serifBox.x,
