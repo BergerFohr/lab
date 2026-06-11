@@ -22,44 +22,45 @@ const serifPaths = [
 
 const letters = [];
 const svgNamespace = "http://www.w3.org/2000/svg";
+const rippleDelayMs = 70;
+const tooltipOffset = 14;
+const tooltipSpring = 0.045;
+const tooltipDamping = 0.78;
 
 let svg;
 let layer;
+let cursorTooltip;
+let tooltipAnimationFrame = null;
+let tooltipCurrent = { x: -100, y: -100 };
+let tooltipTarget = { x: -100, y: -100 };
+let tooltipVelocity = { x: 0, y: 0 };
 let activeIndex = -1;
 let mode = 1;
-let dynamicEnergy = 0;
-let dynamicDirection = 1;
-let lastMoveX = 0;
-let lastMoveY = 0;
-let lastMoveTime = 0;
-let lastDynamicMoveTime = 0;
-let dynamicActiveIndex = -1;
+let swappedLetters = [];
+let rippleTargetSans = false;
+let rippleTimeouts = [];
 
 function setup() {
-  noCanvas();
+  cursorTooltip = document.querySelector(".cursor-tooltip");
   buildLogo();
   setMode(1);
 
-  window.addEventListener("pointermove", handleDynamicMove);
-  window.addEventListener("mousemove", handleDynamicMove);
-  window.addEventListener("touchmove", (event) => {
-    const touch = event.touches && event.touches[0];
-    if (touch) handleDynamicMove(touch);
-  }, { passive: true });
+  window.addEventListener("keydown", keyPressed);
+  window.addEventListener("resize", windowResized);
+  window.addEventListener("click", handleRippleClick);
+  window.addEventListener("pointermove", updateCursorTooltip);
+  window.addEventListener("mousemove", updateCursorTooltip);
+  window.addEventListener("pointerleave", hideCursorTooltip);
+  window.addEventListener("blur", hideCursorTooltip);
+  document.querySelector(".mode-selector")?.addEventListener("click", handleModeSelectorClick);
 }
 
-function draw() {
-  if (mode === 2) {
-    animateDynamicMode(performance.now());
-  }
-}
-
-function keyPressed() {
-  if (key === "1") {
+function keyPressed(event) {
+  if (event.key === "1") {
     setMode(1);
-  } else if (key === "2") {
+  } else if (event.key === "2") {
     setMode(2);
-  } else if (key === "g" || key === "G") {
+  } else if (event.key === "g" || event.key === "G") {
     svg.classList.toggle("show-guides");
   }
 }
@@ -107,28 +108,43 @@ function buildLogo() {
 
 function measureLetters() {
   if (!svg || letters.length === 0) return;
+  if (swappedLetters.length !== letters.length) {
+    swappedLetters = letters.map(() => false);
+  }
 
-  const serifBoxes = letters.map((letter) => {
+  letters.forEach((letter) => {
     letter.serif.removeAttribute("transform");
     letter.sans.removeAttribute("transform");
+  });
 
+  const letterMetrics = letters.map((letter) => {
     const serifBox = letter.serif.getBBox();
+    const sansBox = letter.sans.getBBox();
 
     return {
-      x: serifBox.x,
-      y: 0,
-      width: serifBox.width,
-      height: 52.72
+      serif: {
+        x: serifBox.x,
+        y: 0,
+        width: serifBox.width,
+        height: 52.72
+      },
+      sans: {
+        x: sansBox.x,
+        y: 0,
+        width: sansBox.width,
+        height: 52.72
+      }
     };
   });
 
   letters.forEach((letter, index) => {
-    const box = serifBoxes[index];
-    const previous = serifBoxes[index - 1];
-    const next = serifBoxes[index + 1];
+    const box = letterMetrics[index].serif;
+    const previous = letterMetrics[index - 1]?.serif;
+    const next = letterMetrics[index + 1]?.serif;
     const left = previous ? (previous.x + previous.width + box.x) / 2 : box.x;
     const right = next ? (box.x + box.width + next.x) / 2 : box.x + box.width;
 
+    letter.metrics = letterMetrics[index];
     letter.hit.setAttribute("x", left);
     letter.hit.setAttribute("y", 0);
     letter.hit.setAttribute("width", right - left);
@@ -140,6 +156,52 @@ function measureLetters() {
       height: 52.72
     };
   });
+
+  applyLayout();
+}
+
+function getStyleForIndex(index) {
+  return swappedLetters[index] ? "sans" : "serif";
+}
+
+function getPairGap(index, leftStyle, rightStyle) {
+  const left = letters[index].metrics;
+  const right = letters[index + 1].metrics;
+  const serifGap = right.serif.x - (left.serif.x + left.serif.width);
+  const sansGap = right.sans.x - (left.sans.x + left.sans.width);
+
+  if (leftStyle === "serif" && rightStyle === "serif") return serifGap;
+  if (leftStyle === "sans" && rightStyle === "sans") return sansGap;
+
+  return (serifGap + sansGap) / 2;
+}
+
+function applyLayout() {
+  if (letters.some((letter) => !letter.metrics)) return;
+
+  const styles = letters.map((_, index) => getStyleForIndex(index));
+  const serifStart = letters[0].metrics.serif.x;
+  const targetLefts = [];
+  let cursor = serifStart;
+
+  letters.forEach((letter, index) => {
+    const style = styles[index];
+    targetLefts[index] = cursor;
+    cursor += letter.metrics[style].width;
+
+    if (index < letters.length - 1) {
+      cursor += getPairGap(index, style, styles[index + 1]);
+    }
+  });
+
+  letters.forEach((letter, index) => {
+    const targetLeft = targetLefts[index];
+    const serifDelta = targetLeft - letter.metrics.serif.x;
+    const sansDelta = targetLeft - letter.metrics.sans.x;
+
+    letter.serif.setAttribute("transform", `translate(${serifDelta} 0)`);
+    letter.sans.setAttribute("transform", `translate(${sansDelta} 0)`);
+  });
 }
 
 function pointInSvg(event) {
@@ -150,23 +212,36 @@ function pointInSvg(event) {
 }
 
 function setActiveIndex(index) {
-  if (mode !== 1 || index === activeIndex) return;
+  if (mode !== 2 || index === activeIndex) return;
   renderActiveIndex(index);
 }
 
 function renderActiveIndex(index) {
   activeIndex = index;
+  setLetterStates(letters.map((_, letterIndex) => letterIndex === activeIndex));
+}
+
+function setLetterStates(nextStates) {
+  swappedLetters = nextStates;
+  applyLayout();
   letters.forEach((letter, letterIndex) => {
-    letter.group.classList.toggle("is-swapped", letterIndex === activeIndex);
+    letter.group.classList.toggle("is-swapped", swappedLetters[letterIndex]);
   });
 }
 
+function setLetterSwapped(index, isSwapped) {
+  swappedLetters[index] = isSwapped;
+  applyLayout();
+  letters[index].group.classList.toggle("is-swapped", isSwapped);
+}
+
 function clearActiveIndex() {
+  if (mode !== 2) return;
   renderActiveIndex(-1);
 }
 
 function hitTest(event) {
-  if (mode !== 1) return;
+  if (mode !== 2) return;
 
   const point = pointInSvg(event);
   const index = letters.findIndex(({ box }) => {
@@ -182,66 +257,132 @@ function hitTest(event) {
 
 function setMode(nextMode) {
   mode = nextMode;
-  document.body.classList.toggle("mode-dynamic", mode === 2);
-  document.querySelector("#mode-label").textContent = String(mode);
-  clearActiveIndex();
-
-  if (mode === 1) {
-    dynamicEnergy = 0;
-    dynamicActiveIndex = -1;
-  } else {
-    lastDynamicMoveTime = 0;
-  }
+  document.body.classList.toggle("mode-dynamic", mode === 1);
+  updateModeSelector();
+  clearRippleTimeouts();
+  activeIndex = -1;
+  rippleTargetSans = false;
+  hideCursorTooltip();
+  setLetterStates(letters.map(() => false));
 }
 
-function handleDynamicMove(event) {
-  if (mode !== 2) return;
-
-  const now = performance.now();
-  const x = event.clientX ?? lastMoveX;
-  const y = event.clientY ?? lastMoveY;
-  const dt = Math.max(16, now - (lastMoveTime || now));
-  const dx = x - lastMoveX;
-  const dy = y - lastMoveY;
-  const distance = Math.hypot(dx, dy);
-  const speed = distance / dt;
-
-  if (distance > 0.4) {
-    dynamicDirection = dx >= 0 ? 1 : -1;
-    dynamicEnergy = Math.min(1, dynamicEnergy + 0.2 + speed * 0.9);
-    lastDynamicMoveTime = now;
-  } else {
-    dynamicEnergy = Math.max(dynamicEnergy, 0.55);
-    lastDynamicMoveTime = now;
-  }
-
-  lastMoveX = x;
-  lastMoveY = y;
-  lastMoveTime = now;
-
-  const baseIndex = Math.floor((x / Math.max(1, window.innerWidth)) * letters.length);
-  const motionLead = speed > 0.75 ? dynamicDirection : 0;
-  const nextIndex = constrain(baseIndex + motionLead, 0, letters.length - 1);
-  setDynamicIndex(nextIndex);
+function updateModeSelector() {
+  document.querySelectorAll("[data-mode]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(Number(button.dataset.mode) === mode));
+  });
 }
 
-function setDynamicIndex(index) {
-  if (index === dynamicActiveIndex) return;
-  dynamicActiveIndex = index;
-  renderActiveIndex(index);
+function handleModeSelectorClick(event) {
+  event.stopPropagation();
+  const button = event.target.closest("[data-mode]");
+  if (!button) return;
+  setMode(Number(button.dataset.mode));
 }
 
-function animateDynamicMode(now) {
-  const idleMs = now - lastDynamicMoveTime;
-
-  if (lastDynamicMoveTime === 0) return;
-
-  if (idleMs > 1300) {
-    dynamicEnergy = 0;
-    dynamicActiveIndex = -1;
-    clearActiveIndex();
+function updateCursorTooltip(event) {
+  if (![1, 2].includes(mode) ||
+    !cursorTooltip ||
+    event.pointerType === "touch" ||
+    event.target.closest?.(".mode-selector")) {
+    hideCursorTooltip();
     return;
   }
 
-  dynamicEnergy *= 0.94;
+  const wasVisible = document.body.classList.contains("cursor-tooltip-visible");
+  cursorTooltip.textContent = mode === 1 ? "Click" : "Hover";
+  updateTooltipPosition(event.clientX, event.clientY);
+  if (!wasVisible) {
+    tooltipCurrent = { ...tooltipTarget };
+    tooltipVelocity = { x: 0, y: 0 };
+    cursorTooltip.style.transform = `translate(${tooltipCurrent.x}px, ${tooltipCurrent.y}px)`;
+  }
+
+  document.body.classList.add("cursor-tooltip-visible");
+  startTooltipAnimation();
+}
+
+function updateTooltipPosition(clientX, clientY) {
+  if (!cursorTooltip || typeof clientX !== "number" || typeof clientY !== "number") return;
+
+  const tooltipBox = cursorTooltip.getBoundingClientRect();
+  const maxX = window.innerWidth - tooltipBox.width - tooltipOffset;
+  const maxY = window.innerHeight - tooltipBox.height - tooltipOffset;
+  const x = Math.max(tooltipOffset, Math.min(clientX - tooltipBox.width - tooltipOffset, maxX));
+  const y = Math.max(tooltipOffset, Math.min(clientY - tooltipBox.height - tooltipOffset, maxY));
+
+  tooltipTarget = { x, y };
+}
+
+function startTooltipAnimation() {
+  if (tooltipAnimationFrame !== null) return;
+  tooltipAnimationFrame = requestAnimationFrame(animateCursorTooltip);
+}
+
+function animateCursorTooltip() {
+  const dx = tooltipTarget.x - tooltipCurrent.x;
+  const dy = tooltipTarget.y - tooltipCurrent.y;
+  tooltipVelocity.x = (tooltipVelocity.x + dx * tooltipSpring) * tooltipDamping;
+  tooltipVelocity.y = (tooltipVelocity.y + dy * tooltipSpring) * tooltipDamping;
+  tooltipCurrent.x += tooltipVelocity.x;
+  tooltipCurrent.y += tooltipVelocity.y;
+  tooltipCurrent.x = Math.min(tooltipCurrent.x, tooltipTarget.x);
+  tooltipCurrent.y = Math.min(tooltipCurrent.y, tooltipTarget.y);
+
+  cursorTooltip.style.transform = `translate(${tooltipCurrent.x}px, ${tooltipCurrent.y}px)`;
+
+  const isSettled = Math.abs(dx) < 0.2 &&
+    Math.abs(dy) < 0.2 &&
+    Math.abs(tooltipVelocity.x) < 0.2 &&
+    Math.abs(tooltipVelocity.y) < 0.2;
+
+  if (document.body.classList.contains("cursor-tooltip-visible") && !isSettled) {
+    tooltipAnimationFrame = requestAnimationFrame(animateCursorTooltip);
+  } else {
+    tooltipAnimationFrame = null;
+  }
+}
+
+function hideCursorTooltip() {
+  document.body.classList.remove("cursor-tooltip-visible");
+  tooltipVelocity = { x: 0, y: 0 };
+}
+
+function clearRippleTimeouts() {
+  rippleTimeouts.forEach((timeout) => clearTimeout(timeout));
+  rippleTimeouts = [];
+}
+
+function handleRippleClick(event) {
+  if (mode !== 1 || event.target.closest?.(".mode-selector")) return;
+
+  const point = pointInSvg(event);
+  const targetSans = !rippleTargetSans;
+  rippleTargetSans = targetSans;
+  activeIndex = -1;
+  clearRippleTimeouts();
+
+  const order = letters
+    .map((letter, index) => {
+      const center = letter.box ? letter.box.x + letter.box.width / 2 : letter.metrics.serif.x + letter.metrics.serif.width / 2;
+      return {
+        index,
+        distance: Math.abs(center - point.x)
+      };
+    })
+    .sort((a, b) => a.distance - b.distance)
+    .map(({ index }) => index);
+
+  order.forEach((letterIndex, orderIndex) => {
+    const timeout = setTimeout(() => {
+      setLetterSwapped(letterIndex, targetSans);
+    }, orderIndex * rippleDelayMs);
+
+    rippleTimeouts.push(timeout);
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setup, { once: true });
+} else {
+  setup();
 }

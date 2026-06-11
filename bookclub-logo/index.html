@@ -54,6 +54,35 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    .mode-dynamic svg {
+      cursor: pointer;
+    }
+
+    .cursor-tooltip {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      padding: 5px 7px 4px;
+      border: 1px solid var(--ink);
+      background: var(--page);
+      color: var(--ink);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      line-height: 1;
+      opacity: 0;
+      pointer-events: none;
+      text-transform: uppercase;
+      transform: translate(-100px, -100px);
+      transition: opacity 120ms ease;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .cursor-tooltip-visible .cursor-tooltip {
+      opacity: 1;
+    }
+
     path {
       fill: var(--ink);
       pointer-events: none;
@@ -90,16 +119,33 @@
       pointer-events: none;
     }
 
-    .meta {
+    .mode-selector {
       position: fixed;
+      display: inline-flex;
+      gap: 6px;
       right: clamp(18px, 4vw, 40px);
       bottom: clamp(16px, 3vw, 32px);
+      z-index: 1;
       color: var(--muted);
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      line-height: 1;
-      text-transform: uppercase;
-      user-select: none;
+    }
+
+    .mode-selector button {
+      display: grid;
+      min-width: 0;
+      height: 26px;
+      margin: 0;
+      place-items: center;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font: 11px/1 Arial, Helvetica, sans-serif;
+      letter-spacing: 0;
+      padding: 0;
+    }
+
+    .mode-selector button[aria-pressed="true"] {
+      color: var(--ink);
     }
 
     @media (max-width: 680px) {
@@ -108,8 +154,9 @@
         padding-inline: 20px;
       }
 
-      .meta {
-        display: none;
+      .mode-selector {
+        right: 16px;
+        bottom: 14px;
       }
     }
   </style>
@@ -118,9 +165,12 @@
   <main>
     <div id="logo-stage" aria-label="Bookclub interactive logo"></div>
   </main>
-  <div class="meta" aria-hidden="true">Mode <span id="mode-label">1</span></div>
+  <div class="mode-selector" aria-label="Mode selector" role="group">
+    <button type="button" data-mode="1" aria-pressed="true">Click</button>
+    <button type="button" data-mode="2" aria-pressed="false">Hover</button>
+  </div>
+  <div class="cursor-tooltip" aria-hidden="true">Click</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
-  <script src="/lab/bookclub-logo/sketch.js?v=2e82a4f"></script>
+  <script src="./sketch.js?v=mode-selector-subtle-1"></script>
 </body>
 </html>
