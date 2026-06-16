@@ -45,6 +45,19 @@
       width: 100%;
     }
 
+    .mode-dvd main {
+      padding: 0;
+      pointer-events: none;
+    }
+
+    .mode-dvd #logo-stage {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: calc(min(82vw, 1120px) - (2 * clamp(28px, 6vw, 80px)));
+      will-change: transform;
+    }
+
     svg {
       display: block;
       width: 100%;
@@ -148,6 +161,56 @@
       color: var(--ink);
     }
 
+    .scrub-control {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 1;
+      height: 31px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-200px, -200px);
+    }
+
+    .mode-scrub .scrub-control {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .scrub-track {
+      position: absolute;
+      top: 15px;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background: var(--ink);
+    }
+
+    .scrub-handle {
+      position: absolute;
+      top: 8px;
+      left: 0;
+      width: 17px;
+      height: 15px;
+      border: 0;
+      background: transparent;
+      cursor: ew-resize;
+      margin: 0;
+      padding: 0;
+      transform: translateX(-8px);
+      touch-action: none;
+    }
+
+    .scrub-handle::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 8px;
+      width: 1px;
+      height: 15px;
+      background: var(--ink);
+    }
+
     @media (max-width: 680px) {
       main {
         width: 100%;
@@ -158,6 +221,11 @@
         right: 16px;
         bottom: 14px;
       }
+
+      .mode-dvd #logo-stage {
+        width: calc(100vw - 40px);
+      }
+
     }
   </style>
 </head>
@@ -166,11 +234,17 @@
     <div id="logo-stage" aria-label="Bookclub interactive logo"></div>
   </main>
   <div class="mode-selector" aria-label="Mode selector" role="group">
-    <button type="button" data-mode="1" aria-pressed="true">Click</button>
-    <button type="button" data-mode="2" aria-pressed="false">Hover</button>
+    <button type="button" data-mode="1" aria-pressed="true">DVD</button>
+    <button type="button" data-mode="2" aria-pressed="false">Click</button>
+    <button type="button" data-mode="3" aria-pressed="false">Hover</button>
+    <button type="button" data-mode="4" aria-pressed="false">Scrub</button>
   </div>
-  <div class="cursor-tooltip" aria-hidden="true">Click</div>
+  <div class="scrub-control" aria-hidden="true">
+    <div class="scrub-track"></div>
+    <button class="scrub-handle" type="button" aria-label="Scrub logo style"></button>
+  </div>
+  <div class="cursor-tooltip" aria-hidden="true">Wait for it</div>
 
-  <script src="./sketch.js?v=mode-selector-subtle-1"></script>
+  <script src="./sketch.js?v=dvd-first-1"></script>
 </body>
 </html>

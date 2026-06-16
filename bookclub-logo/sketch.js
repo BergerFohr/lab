@@ -26,22 +26,38 @@ const rippleDelayMs = 70;
 const tooltipOffset = 14;
 const tooltipSpring = 0.045;
 const tooltipDamping = 0.78;
+const dvdSpeed = 180;
 
 let svg;
 let layer;
+let stage;
 let cursorTooltip;
+let scrubControl;
+let scrubHandle;
 let tooltipAnimationFrame = null;
 let tooltipCurrent = { x: -100, y: -100 };
 let tooltipTarget = { x: -100, y: -100 };
 let tooltipVelocity = { x: 0, y: 0 };
+let dvdAnimationFrame = null;
+let dvdState = {
+  x: 0,
+  y: 0,
+  vx: 0,
+  vy: 0,
+  lastTime: 0,
+  targetSans: false
+};
 let activeIndex = -1;
 let mode = 1;
 let swappedLetters = [];
 let rippleTargetSans = false;
 let rippleTimeouts = [];
+let isScrubbing = false;
 
 function setup() {
   cursorTooltip = document.querySelector(".cursor-tooltip");
+  scrubControl = document.querySelector(".scrub-control");
+  scrubHandle = document.querySelector(".scrub-handle");
   buildLogo();
   setMode(1);
 
@@ -52,6 +68,10 @@ function setup() {
   window.addEventListener("mousemove", updateCursorTooltip);
   window.addEventListener("pointerleave", hideCursorTooltip);
   window.addEventListener("blur", hideCursorTooltip);
+  window.addEventListener("pointermove", handleScrubPointerMove);
+  window.addEventListener("pointerup", stopScrubDrag);
+  window.addEventListener("blur", stopScrubDrag);
+  scrubHandle?.addEventListener("pointerdown", startScrubDrag);
   document.querySelector(".mode-selector")?.addEventListener("click", handleModeSelectorClick);
 }
 
@@ -60,6 +80,10 @@ function keyPressed(event) {
     setMode(1);
   } else if (event.key === "2") {
     setMode(2);
+  } else if (event.key === "3") {
+    setMode(3);
+  } else if (event.key === "4") {
+    setMode(4);
   } else if (event.key === "g" || event.key === "G") {
     svg.classList.toggle("show-guides");
   }
@@ -67,6 +91,11 @@ function keyPressed(event) {
 
 function windowResized() {
   measureLetters();
+  if (mode === 1) {
+    clampDvdPosition();
+  } else if (mode === 4) {
+    positionScrubControl();
+  }
 }
 
 function makeSvgElement(tag, attrs = {}) {
@@ -76,7 +105,7 @@ function makeSvgElement(tag, attrs = {}) {
 }
 
 function buildLogo() {
-  const stage = document.querySelector("#logo-stage");
+  stage = document.querySelector("#logo-stage");
   svg = makeSvgElement("svg", {
     id: "bookclub-logo",
     viewBox: "0 0 290.51 52.72",
@@ -212,7 +241,7 @@ function pointInSvg(event) {
 }
 
 function setActiveIndex(index) {
-  if (mode !== 2 || index === activeIndex) return;
+  if (mode !== 3 || index === activeIndex) return;
   renderActiveIndex(index);
 }
 
@@ -236,12 +265,12 @@ function setLetterSwapped(index, isSwapped) {
 }
 
 function clearActiveIndex() {
-  if (mode !== 2) return;
+  if (mode !== 3) return;
   renderActiveIndex(-1);
 }
 
 function hitTest(event) {
-  if (mode !== 2) return;
+  if (mode !== 3) return;
 
   const point = pointInSvg(event);
   const index = letters.findIndex(({ box }) => {
@@ -257,13 +286,22 @@ function hitTest(event) {
 
 function setMode(nextMode) {
   mode = nextMode;
-  document.body.classList.toggle("mode-dynamic", mode === 1);
+  document.body.classList.toggle("mode-dvd", mode === 1);
+  document.body.classList.toggle("mode-dynamic", mode === 2);
+  document.body.classList.toggle("mode-scrub", mode === 4);
   updateModeSelector();
   clearRippleTimeouts();
+  stopDvdMode();
+  stopScrubDrag();
   activeIndex = -1;
   rippleTargetSans = false;
   hideCursorTooltip();
   setLetterStates(letters.map(() => false));
+  if (mode === 1) {
+    startDvdMode();
+  } else if (mode === 4) {
+    startScrubMode();
+  }
 }
 
 function updateModeSelector() {
@@ -280,16 +318,17 @@ function handleModeSelectorClick(event) {
 }
 
 function updateCursorTooltip(event) {
-  if (![1, 2].includes(mode) ||
+  if (![1, 2, 3, 4].includes(mode) ||
     !cursorTooltip ||
     event.pointerType === "touch" ||
-    event.target.closest?.(".mode-selector")) {
+    event.target.closest?.(".mode-selector") ||
+    event.target.closest?.(".scrub-control")) {
     hideCursorTooltip();
     return;
   }
 
   const wasVisible = document.body.classList.contains("cursor-tooltip-visible");
-  cursorTooltip.textContent = mode === 1 ? "Click" : "Hover";
+  cursorTooltip.textContent = getTooltipText();
   updateTooltipPosition(event.clientX, event.clientY);
   if (!wasVisible) {
     tooltipCurrent = { ...tooltipTarget };
@@ -299,6 +338,13 @@ function updateCursorTooltip(event) {
 
   document.body.classList.add("cursor-tooltip-visible");
   startTooltipAnimation();
+}
+
+function getTooltipText() {
+  if (mode === 1) return "Wait for it";
+  if (mode === 2) return "Click";
+  if (mode === 3) return "Hover";
+  return "Scrub";
 }
 
 function updateTooltipPosition(clientX, clientY) {
@@ -353,7 +399,7 @@ function clearRippleTimeouts() {
 }
 
 function handleRippleClick(event) {
-  if (mode !== 1 || event.target.closest?.(".mode-selector")) return;
+  if (mode !== 2 || event.target.closest?.(".mode-selector")) return;
 
   const point = pointInSvg(event);
   const targetSans = !rippleTargetSans;
@@ -379,6 +425,170 @@ function handleRippleClick(event) {
 
     rippleTimeouts.push(timeout);
   });
+}
+
+function startScrubMode() {
+  requestAnimationFrame(() => {
+    if (mode !== 4) return;
+    positionScrubControl();
+    updateScrubProgress(0);
+  });
+}
+
+function positionScrubControl() {
+  if (!scrubControl || !stage) return;
+
+  const stageRect = stage.getBoundingClientRect();
+  scrubControl.style.width = `${stageRect.width}px`;
+  scrubControl.style.transform = `translate(${stageRect.left}px, ${stageRect.bottom + 18}px)`;
+}
+
+function startScrubDrag(event) {
+  if (mode !== 4) return;
+
+  event.preventDefault();
+  isScrubbing = true;
+  scrubHandle?.setPointerCapture?.(event.pointerId);
+  updateScrubFromClientX(event.clientX);
+}
+
+function handleScrubPointerMove(event) {
+  if (!isScrubbing || mode !== 4) return;
+  updateScrubFromClientX(event.clientX);
+}
+
+function stopScrubDrag() {
+  isScrubbing = false;
+}
+
+function updateScrubFromClientX(clientX) {
+  if (!scrubControl) return;
+
+  const rect = scrubControl.getBoundingClientRect();
+  const progress = Math.min(Math.max((clientX - rect.left) / Math.max(1, rect.width), 0), 1);
+  updateScrubProgress(progress);
+}
+
+function updateScrubProgress(progress) {
+  const clampedProgress = Math.min(Math.max(progress, 0), 1);
+  const swappedCount = clampedProgress === 0 ? 0 : Math.ceil(clampedProgress * letters.length);
+  setLetterStates(letters.map((_, index) => index < swappedCount));
+
+  if (scrubHandle && scrubControl) {
+    const width = scrubControl.getBoundingClientRect().width;
+    scrubHandle.style.transform = `translateX(${clampedProgress * width - 8}px)`;
+  }
+}
+
+function startDvdMode() {
+  requestAnimationFrame(() => {
+    if (mode !== 1) return;
+
+    dvdState.targetSans = false;
+    setLetterStates(letters.map(() => dvdState.targetSans));
+    seedDvdDirection();
+    seedDvdPosition();
+    dvdState.lastTime = 0;
+    dvdAnimationFrame = requestAnimationFrame(animateDvdMode);
+  });
+}
+
+function stopDvdMode() {
+  if (dvdAnimationFrame !== null) {
+    cancelAnimationFrame(dvdAnimationFrame);
+    dvdAnimationFrame = null;
+  }
+
+  dvdState.lastTime = 0;
+  if (stage) {
+    stage.style.transform = "";
+  }
+}
+
+function seedDvdDirection() {
+  const angle = Math.random() * Math.PI * 2;
+  const minAxisVelocity = dvdSpeed * 0.28;
+  dvdState.vx = Math.cos(angle) * dvdSpeed;
+  dvdState.vy = Math.sin(angle) * dvdSpeed;
+
+  if (Math.abs(dvdState.vx) < minAxisVelocity) {
+    dvdState.vx = Math.sign(dvdState.vx || 1) * minAxisVelocity;
+  }
+
+  if (Math.abs(dvdState.vy) < minAxisVelocity) {
+    dvdState.vy = Math.sign(dvdState.vy || 1) * minAxisVelocity;
+  }
+}
+
+function getDvdBounds() {
+  const rect = stage.getBoundingClientRect();
+  return {
+    width: rect.width,
+    height: rect.height,
+    maxX: Math.max(0, window.innerWidth - rect.width),
+    maxY: Math.max(0, window.innerHeight - rect.height)
+  };
+}
+
+function seedDvdPosition() {
+  const bounds = getDvdBounds();
+  dvdState.x = Math.random() * bounds.maxX;
+  dvdState.y = Math.random() * bounds.maxY;
+  stage.style.transform = `translate3d(${dvdState.x}px, ${dvdState.y}px, 0)`;
+}
+
+function clampDvdPosition() {
+  if (!stage) return;
+
+  const bounds = getDvdBounds();
+  dvdState.x = Math.min(Math.max(dvdState.x, 0), bounds.maxX);
+  dvdState.y = Math.min(Math.max(dvdState.y, 0), bounds.maxY);
+  stage.style.transform = `translate3d(${dvdState.x}px, ${dvdState.y}px, 0)`;
+}
+
+function toggleDvdStyle() {
+  dvdState.targetSans = !dvdState.targetSans;
+  setLetterStates(letters.map(() => dvdState.targetSans));
+}
+
+function animateDvdMode(now) {
+  if (mode !== 1) {
+    dvdAnimationFrame = null;
+    return;
+  }
+
+  if (dvdState.lastTime === 0) {
+    dvdState.lastTime = now;
+  }
+
+  const deltaSeconds = Math.min(0.05, (now - dvdState.lastTime) / 1000);
+  dvdState.lastTime = now;
+  const bounds = getDvdBounds();
+  let nextX = dvdState.x + dvdState.vx * deltaSeconds;
+  let nextY = dvdState.y + dvdState.vy * deltaSeconds;
+  let hitEdge = false;
+
+  if (nextX <= 0 || nextX >= bounds.maxX) {
+    nextX = Math.min(Math.max(nextX, 0), bounds.maxX);
+    dvdState.vx *= -1;
+    hitEdge = true;
+  }
+
+  if (nextY <= 0 || nextY >= bounds.maxY) {
+    nextY = Math.min(Math.max(nextY, 0), bounds.maxY);
+    dvdState.vy *= -1;
+    hitEdge = true;
+  }
+
+  dvdState.x = nextX;
+  dvdState.y = nextY;
+  stage.style.transform = `translate3d(${dvdState.x}px, ${dvdState.y}px, 0)`;
+
+  if (hitEdge) {
+    toggleDvdStyle();
+  }
+
+  dvdAnimationFrame = requestAnimationFrame(animateDvdMode);
 }
 
 if (document.readyState === "loading") {
