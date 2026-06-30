@@ -419,7 +419,10 @@ function makeHatchSegments(maskPaths, angleDeg, spacing, config) {
   const maxProjection = Math.max(...projections) + spacing;
   const diagonal = Math.hypot(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 1.4;
   const segments = [];
-  const trim = Math.max(config.lineWidth * 0.55, Math.min(spacing * 0.32, config.infillSetback * 0.45));
+  const baseTrim = Math.max(config.lineWidth * 0.55, Math.min(spacing * 0.32, config.infillSetback * 0.45));
+  const trim = config.infillPattern === "zigzag"
+    ? Math.max(baseTrim, spacing * 0.58)
+    : baseTrim;
   const minLength = Math.max(spacing * 0.72, config.lineWidth * 2.2);
   let row = 0;
 
@@ -461,32 +464,50 @@ function stitchSerpentine(segments, maskPaths, spacing, config) {
     rows.get(segment.row).push(segment);
   });
 
-  const paths = [];
-  let active = null;
+  const complete = [];
+  let activePaths = [];
   let direction = 1;
   const threshold = spacing * config.connectThreshold;
   [...rows.keys()].sort((a, b) => a - b).forEach((row) => {
     const ordered = rows.get(row).sort((a, b) => a.center - b.center);
     if (direction < 0) ordered.reverse();
 
+    const nextActive = [];
     ordered.forEach((segment) => {
       const points = direction > 0 ? segment.points : [...segment.points].reverse();
-      const turnPoints = active
-        ? makeTurnPoints(active[active.length - 1], points[0], active[active.length - 2], points[1], maskPaths, threshold)
-        : null;
-      if (!active || !turnPoints) {
-        if (active && active.length > 1) paths.push(active);
-        active = points.map((point) => ({ ...point }));
+      const match = findSerpentineMatch(activePaths, points, maskPaths, threshold);
+      if (!match) {
+        nextActive.push(points.map((point) => ({ ...point })));
         return;
       }
-      active.push(...turnPoints);
-      active.push(...points.slice(1).map((point) => ({ ...point })));
+      const path = activePaths.splice(match.index, 1)[0];
+      path.push(...match.turnPoints);
+      path.push(...points.slice(1).map((point) => ({ ...point })));
+      nextActive.push(path);
     });
+
+    activePaths.forEach((path) => {
+      if (path.length > 1) complete.push(path);
+    });
+    activePaths = nextActive;
     direction *= -1;
   });
 
-  if (active && active.length > 1) paths.push(active);
-  return paths;
+  activePaths.forEach((path) => {
+    if (path.length > 1) complete.push(path);
+  });
+  return complete;
+}
+
+function findSerpentineMatch(activePaths, points, maskPaths, threshold) {
+  let best = null;
+  activePaths.forEach((path, index) => {
+    const turnPoints = makeTurnPoints(path[path.length - 1], points[0], path[path.length - 2], points[1], maskPaths, threshold);
+    if (!turnPoints) return;
+    const score = distance(path[path.length - 1], points[0]);
+    if (!best || score < best.score) best = { index, turnPoints, score };
+  });
+  return best;
 }
 
 function makeTurnPoints(a, b, previous, next, maskPaths, threshold) {
