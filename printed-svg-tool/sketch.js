@@ -145,8 +145,9 @@ function settings() {
   const lineWidth = Number(controls.lineWidth.value);
   const lineGap = Number(controls.lineGap.value);
   const density = Number(controls.density.value);
-  const baseSpacing = lineWidth + lineGap;
-  const infillSpacing = map(density, 8, 100, baseSpacing * 4.5, Math.max(1, lineWidth * 0.62), true);
+  const minSpacing = Math.max(1, lineWidth + lineGap * 0.35);
+  const maxSpacing = lineWidth * 4.8 + lineGap * 1.5;
+  const infillSpacing = map(density, 8, 100, maxSpacing, minSpacing, true);
 
   return {
     lineWidth,
@@ -587,9 +588,11 @@ function drawPrintedLayer(paths, isAlternate) {
     strokeWeight(config.lineWidth);
     drawPolyline(path, 0, 0);
 
-    stroke(mixHex(baseColor, "#ffffff", 0.42));
-    strokeWeight(Math.max(1, config.lineWidth * 0.22));
-    drawPolyline(path, -config.lineWidth * 0.08, -config.lineWidth * 0.08);
+    if (config.zOffset > 0) {
+      stroke(mixHex(baseColor, "#ffffff", 0.42));
+      strokeWeight(Math.max(1, config.lineWidth * 0.22));
+      drawPolyline(path, -config.lineWidth * 0.08, -config.lineWidth * 0.08);
+    }
   });
 }
 
