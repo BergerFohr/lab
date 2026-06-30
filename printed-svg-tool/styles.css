@@ -27,6 +27,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -114,6 +115,18 @@ input[type="file"] {
   text-transform: none;
 }
 
+select {
+  width: 100%;
+  height: 31px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  padding: 0 8px;
+  font-size: 12px;
+  text-transform: none;
+}
+
 input[type="range"] {
   width: 100%;
   accent-color: var(--focus);
@@ -190,6 +203,7 @@ button:first-child {
 
 button:focus-visible,
 textarea:focus-visible,
+select:focus-visible,
 input:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;

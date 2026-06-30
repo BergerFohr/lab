@@ -66,6 +66,8 @@ function bindControls() {
     lineGap: document.querySelector("#line-gap"),
     density: document.querySelector("#density"),
     angle: document.querySelector("#angle"),
+    infillPattern: document.querySelector("#infill-pattern"),
+    infillSetback: document.querySelector("#infill-setback"),
     shellCount: document.querySelector("#shell-count"),
     shellSpacing: document.querySelector("#shell-spacing"),
     outerCount: document.querySelector("#outer-count"),
@@ -88,6 +90,7 @@ function bindControls() {
   [
     controls.alternateLayer,
     controls.roundedCaps,
+    controls.infillPattern,
     controls.materialColor,
     controls.shadowColor,
     controls.bedColor
@@ -125,6 +128,7 @@ function updateOutputs() {
     [controls.lineGap, "px"],
     [controls.density, "%"],
     [controls.angle, "deg"],
+    [controls.infillSetback, "px"],
     [controls.shellCount, ""],
     [controls.shellSpacing, "px"],
     [controls.outerCount, ""],
@@ -150,6 +154,8 @@ function settings() {
     density,
     infillSpacing,
     angle: Number(controls.angle.value),
+    infillPattern: controls.infillPattern.value,
+    infillSetback: Number(controls.infillSetback.value),
     shellCount: Number(controls.shellCount.value),
     shellSpacing: Number(controls.shellSpacing.value),
     outerCount: Number(controls.outerCount.value),
@@ -179,9 +185,9 @@ function rebuildToolpaths() {
   state.shells = makeShells(state.paths, config.shellCount, -Math.abs(config.shellSpacing));
   state.outerShells = makeShells(state.paths, config.outerCount, Math.abs(config.shellSpacing * 0.72));
   const interior = makeInteriorMask(state.paths, config);
-  state.infill = makeInfill(interior, config.angle, config.infillSpacing);
+  state.infill = makeInfill(interior, config.angle, config.infillSpacing, config);
   state.altInfill = config.alternateLayer
-    ? makeInfill(interior, config.angle + 90, config.infillSpacing * 1.65)
+    ? makeInfill(interior, config.angle + 90, config.infillSpacing * 1.65, { ...config, infillPattern: "lines" })
     : [];
 
   preview = {
@@ -341,7 +347,9 @@ function makeShells(paths, count, offsetStep) {
 }
 
 function makeInteriorMask(paths, config) {
-  const inset = -Math.max(config.lineWidth * 1.4, config.shellCount * config.shellSpacing + config.lineGap);
+  const shellInset = config.shellCount * config.shellSpacing + config.lineGap;
+  const extrusionInset = config.lineWidth * 1.35 + config.infillSetback;
+  const inset = -Math.max(extrusionInset, shellInset + config.infillSetback);
   const interior = offsetPolygons(paths, inset);
   return interior.length ? interior : paths;
 }
@@ -378,7 +386,21 @@ function closePath(path) {
   return next;
 }
 
-function makeInfill(maskPaths, angleDeg, spacing) {
+function makeInfill(maskPaths, angleDeg, spacing, config) {
+  const primary = makeHatchSegments(maskPaths, angleDeg, spacing, config);
+  if (config.infillPattern === "grid") {
+    return [
+      ...primary,
+      ...makeHatchSegments(maskPaths, angleDeg + 90, spacing * 1.18, config)
+    ].map((segment) => segment.points);
+  }
+  if (config.infillPattern === "zigzag") {
+    return stitchZigzag(primary, maskPaths, spacing);
+  }
+  return primary.map((segment) => segment.points);
+}
+
+function makeHatchSegments(maskPaths, angleDeg, spacing, config) {
   const bounds = expandBounds(getBounds(maskPaths), spacing * 4);
   const angleRad = radians(angleDeg);
   const axis = { x: Math.cos(angleRad), y: Math.sin(angleRad) };
@@ -394,17 +416,79 @@ function makeInfill(maskPaths, angleDeg, spacing) {
   const maxProjection = Math.max(...projections) + spacing;
   const diagonal = Math.hypot(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 1.4;
   const segments = [];
+  const trim = Math.max(config.lineWidth * 0.55, Math.min(spacing * 0.32, config.infillSetback * 0.45));
+  const minLength = Math.max(spacing * 0.72, config.lineWidth * 2.2);
+  let row = 0;
 
   for (let projection = minProjection; projection <= maxProjection; projection += spacing) {
     const center = { x: normal.x * projection, y: normal.y * projection };
     const a = { x: center.x - axis.x * diagonal, y: center.y - axis.y * diagonal };
     const b = { x: center.x + axis.x * diagonal, y: center.y + axis.y * diagonal };
     clipLineToMask(a, b, maskPaths).forEach((segment) => {
-      if (distance(segment[0], segment[1]) > spacing * 0.35) segments.push(segment);
+      const trimmed = trimSegment(segment, trim);
+      if (!trimmed) return;
+      const length = distance(trimmed[0], trimmed[1]);
+      if (length > minLength) {
+        segments.push({
+          points: trimmed,
+          row,
+          projection,
+          center: dot(midpoint(trimmed[0], trimmed[1]), axis)
+        });
+      }
     });
+    row += 1;
   }
 
   return segments;
+}
+
+function trimSegment(segment, amount) {
+  const [a, b] = segment;
+  const length = distance(a, b);
+  if (length <= amount * 2.4) return null;
+  const t = amount / length;
+  return [lerpPoint(a, b, t), lerpPoint(a, b, 1 - t)];
+}
+
+function stitchZigzag(segments, maskPaths, spacing) {
+  const rows = new Map();
+  segments.forEach((segment) => {
+    if (!rows.has(segment.row)) rows.set(segment.row, []);
+    rows.get(segment.row).push(segment);
+  });
+
+  const paths = [];
+  let active = null;
+  let direction = 1;
+  [...rows.keys()].sort((a, b) => a - b).forEach((row) => {
+    const ordered = rows.get(row).sort((a, b) => a.center - b.center);
+    if (direction < 0) ordered.reverse();
+
+    ordered.forEach((segment) => {
+      const points = direction > 0 ? segment.points : [...segment.points].reverse();
+      if (!active || !canConnect(active[active.length - 1], points[0], maskPaths, spacing)) {
+        if (active && active.length > 1) paths.push(active);
+        active = points.map((point) => ({ ...point }));
+        return;
+      }
+      active.push(...points.map((point) => ({ ...point })));
+    });
+    direction *= -1;
+  });
+
+  if (active && active.length > 1) paths.push(active);
+  return paths;
+}
+
+function canConnect(a, b, maskPaths, spacing) {
+  if (!a || !b || distance(a, b) > spacing * 2.25) return false;
+  const checks = 5;
+  for (let i = 1; i < checks; i += 1) {
+    const point = lerpPoint(a, b, i / checks);
+    if (!pointInCompound(point, maskPaths)) return false;
+  }
+  return true;
 }
 
 function clipLineToMask(a, b, paths) {
@@ -564,6 +648,13 @@ function lerpPoint(a, b, t) {
   return {
     x: lerp(a.x, b.x, t),
     y: lerp(a.y, b.y, t)
+  };
+}
+
+function midpoint(a, b) {
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2
   };
 }
 
