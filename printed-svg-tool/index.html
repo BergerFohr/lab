@@ -49,15 +49,15 @@
 
         <label class="control">
           <span>Infill angle</span>
-          <input id="angle" type="range" min="-90" max="90" step="1" value="-35">
+          <input id="angle" type="range" min="-90" max="90" step="1" value="45">
           <output for="angle"></output>
         </label>
 
         <label class="control">
           <span>Infill pattern</span>
           <select id="infill-pattern">
-            <option value="lines" selected>Capsules</option>
-            <option value="zigzag">Zigzag</option>
+            <option value="zigzag" selected>Serpentine</option>
+            <option value="lines">Capsules</option>
             <option value="grid">Grid</option>
           </select>
         </label>
@@ -66,6 +66,12 @@
           <span>Infill setback</span>
           <input id="infill-setback" type="range" min="0" max="60" step="0.5" value="12">
           <output for="infill-setback"></output>
+        </label>
+
+        <label class="control">
+          <span>Connect threshold</span>
+          <input id="connect-threshold" type="range" min="0.8" max="4" step="0.05" value="1.75">
+          <output for="connect-threshold"></output>
         </label>
 
         <label class="control">
