@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Printed SVG Tool</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app">
+    <section class="stage-wrap" aria-label="3D print preview">
+      <div id="canvas-stage"></div>
+    </section>
+
+    <aside class="panel" aria-label="Controls">
+      <div class="brand">
+        <h1>Printed SVG Tool</h1>
+        <p>Vector toolpath preview for logo forms.</p>
+      </div>
+
+      <label class="file-control">
+        <span>SVG input</span>
+        <input id="file-input" type="file" accept=".svg,image/svg+xml">
+      </label>
+
+      <label class="control">
+        <span>Paste SVG</span>
+        <textarea id="svg-input" spellcheck="false"></textarea>
+      </label>
+
+      <div class="grid-two">
+        <label class="control">
+          <span>Nozzle</span>
+          <input id="line-width" type="range" min="1" max="18" step="0.5" value="5">
+          <output for="line-width"></output>
+        </label>
+
+        <label class="control">
+          <span>Line gap</span>
+          <input id="line-gap" type="range" min="0" max="16" step="0.5" value="2">
+          <output for="line-gap"></output>
+        </label>
+
+        <label class="control">
+          <span>Infill density</span>
+          <input id="density" type="range" min="8" max="100" step="1" value="46">
+          <output for="density"></output>
+        </label>
+
+        <label class="control">
+          <span>Infill angle</span>
+          <input id="angle" type="range" min="-90" max="90" step="1" value="-35">
+          <output for="angle"></output>
+        </label>
+
+        <label class="control">
+          <span>Shells</span>
+          <input id="shell-count" type="range" min="0" max="8" step="1" value="3">
+          <output for="shell-count"></output>
+        </label>
+
+        <label class="control">
+          <span>Shell offset</span>
+          <input id="shell-spacing" type="range" min="1" max="18" step="0.5" value="6">
+          <output for="shell-spacing"></output>
+        </label>
+
+        <label class="control">
+          <span>Outer strokes</span>
+          <input id="outer-count" type="range" min="0" max="6" step="1" value="1">
+          <output for="outer-count"></output>
+        </label>
+
+        <label class="control">
+          <span>Extrude offset</span>
+          <input id="z-offset" type="range" min="0" max="16" step="0.5" value="5">
+          <output for="z-offset"></output>
+        </label>
+      </div>
+
+      <div class="switch-row">
+        <label><input id="alternate-layer" type="checkbox" checked> alternate layer</label>
+        <label><input id="rounded-caps" type="checkbox" checked> round caps</label>
+      </div>
+
+      <div class="color-row">
+        <label class="color-control">
+          <span>Material</span>
+          <input id="material-color" type="color" value="#f26b38">
+        </label>
+        <label class="color-control">
+          <span>Shadow</span>
+          <input id="shadow-color" type="color" value="#8d2f1c">
+        </label>
+        <label class="color-control">
+          <span>Bed</span>
+          <input id="bed-color" type="color" value="#f3f1ea">
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="render-button" type="button">Render</button>
+        <button id="export-png" type="button">PNG</button>
+        <button id="export-svg" type="button">SVG</button>
+      </div>
+    </aside>
+  </main>
+
+  <template id="default-svg">
+    <svg viewBox="0 0 420 180" xmlns="http://www.w3.org/2000/svg">
+      <path d="M67.7 40.6c26.3 0 44.9 18.6 44.9 49.4 0 30.6-18.6 49.4-44.9 49.4H25V40.6h42.7Zm-13.1 73.7h10.7c10.6 0 17.7-8.2 17.7-24.3 0-16.3-7.1-24.3-17.7-24.3H54.6v48.6Z"/>
+      <path d="M180.9 40.6v25.1h-43v12.2h38.8v23.6h-38.8v12.8h43v25.1h-72.7V40.6h72.7Z"/>
+      <path d="M250.5 40.6v25.1h-41.1v15h36.1v24.5h-36.1v34.2h-29.8V40.6h70.9Z"/>
+      <path d="M323.5 40.6c22.6 0 37.4 12.4 37.4 32.2 0 12.4-5.7 22.4-15.8 27.8l20.4 38.8h-32.6l-15.9-32.8h-10.2v32.8H277V40.6h46.5Zm-16.7 42.8h12.9c6.5 0 10.7-3.6 10.7-9.6s-4.2-9.6-10.7-9.6h-12.9v19.2Z"/>
+      <path d="M381.6 139.4h-29.8V40.6h29.8v98.8Z"/>
+    </svg>
+  </template>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
+  <script src="./sketch.js?v=20260630-1"></script>
+</body>
+</html>
