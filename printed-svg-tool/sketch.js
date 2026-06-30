@@ -471,12 +471,15 @@ function stitchSerpentine(segments, maskPaths, spacing, config) {
 
     ordered.forEach((segment) => {
       const points = direction > 0 ? segment.points : [...segment.points].reverse();
-      if (!active || !canConnect(active[active.length - 1], points[0], maskPaths, threshold)) {
+      const turnPoints = active
+        ? makeTurnPoints(active[active.length - 1], points[0], active[active.length - 2], points[1], maskPaths, threshold)
+        : null;
+      if (!active || !turnPoints) {
         if (active && active.length > 1) paths.push(active);
         active = points.map((point) => ({ ...point }));
         return;
       }
-      active.push(...makeTurnPoints(active[active.length - 1], points[0], maskPaths, threshold));
+      active.push(...turnPoints);
       active.push(...points.slice(1).map((point) => ({ ...point })));
     });
     direction *= -1;
@@ -486,23 +489,31 @@ function stitchSerpentine(segments, maskPaths, spacing, config) {
   return paths;
 }
 
-function canConnect(a, b, maskPaths, spacing) {
-  if (!a || !b || distance(a, b) > spacing) return false;
-  const checks = 5;
-  for (let i = 1; i < checks; i += 1) {
-    const point = lerpPoint(a, b, i / checks);
-    if (!pointInCompound(point, maskPaths)) return false;
-  }
-  return true;
-}
+function makeTurnPoints(a, b, previous, next, maskPaths, threshold) {
+  if (!a || !b || distance(a, b) > threshold) return null;
+  const tangent = previous ? normalizeVector({ x: a.x - previous.x, y: a.y - previous.y }) : null;
+  if (!tangent) return null;
+  const bridge = { x: b.x - a.x, y: b.y - a.y };
+  const bridgeLength = Math.hypot(bridge.x, bridge.y);
+  if (bridgeLength < POINT_EPSILON) return [{ ...b }];
 
-function makeTurnPoints(a, b, maskPaths, threshold) {
+  const normal = normalizeVector(bridge);
+  const radius = bridgeLength / 2;
+  const center = midpoint(a, b);
   const points = [];
-  const checks = 6;
-  for (let i = 1; i <= checks; i += 1) {
-    const point = lerpPoint(a, b, i / checks);
-    if (!pointInCompound(point, maskPaths) || distance(a, point) > threshold) return [{ ...b }];
+  const steps = Math.max(8, Math.ceil(Math.PI * radius / Math.max(2, SAMPLE_STEP)));
+  for (let i = 1; i <= steps; i += 1) {
+    const theta = Math.PI - (Math.PI * i) / steps;
+    const point = {
+      x: center.x + normal.x * radius * Math.cos(theta) + tangent.x * radius * Math.sin(theta),
+      y: center.y + normal.y * radius * Math.cos(theta) + tangent.y * radius * Math.sin(theta)
+    };
+    if (!pointInCompound(point, maskPaths)) return null;
     points.push(point);
+  }
+  if (next) {
+    const outgoing = normalizeVector({ x: next.x - b.x, y: next.y - b.y });
+    if (outgoing && dot(tangent, outgoing) > -0.5) return null;
   }
   return points;
 }
@@ -678,6 +689,15 @@ function midpoint(a, b) {
 
 function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function normalizeVector(vector) {
+  const length = Math.hypot(vector.x, vector.y);
+  if (length < POINT_EPSILON) return null;
+  return {
+    x: vector.x / length,
+    y: vector.y / length
+  };
 }
 
 function polygonArea(path) {
