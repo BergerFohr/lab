@@ -70,7 +70,6 @@ function bindControls() {
     connectThreshold: document.querySelector("#connect-threshold"),
     shellCount: document.querySelector("#shell-count"),
     shellSpacing: document.querySelector("#shell-spacing"),
-    outerCount: document.querySelector("#outer-count"),
     zOffset: document.querySelector("#z-offset"),
     alternateLayer: document.querySelector("#alternate-layer"),
     roundedCaps: document.querySelector("#rounded-caps"),
@@ -132,7 +131,6 @@ function updateOutputs() {
     [controls.connectThreshold, "x"],
     [controls.shellCount, ""],
     [controls.shellSpacing, "px"],
-    [controls.outerCount, ""],
     [controls.zOffset, "px"]
   ];
 
@@ -161,7 +159,6 @@ function settings() {
     connectThreshold: Number(controls.connectThreshold.value),
     shellCount: Number(controls.shellCount.value),
     shellSpacing: Number(controls.shellSpacing.value),
-    outerCount: Number(controls.outerCount.value),
     zOffset: Number(controls.zOffset.value),
     alternateLayer: controls.alternateLayer.checked,
     roundedCaps: controls.roundedCaps.checked,
@@ -186,7 +183,7 @@ function rebuildToolpaths() {
 
   const config = settings();
   state.shells = makeShells(state.paths, config.shellCount, Math.abs(config.shellSpacing));
-  state.outerShells = makeShells(state.paths, config.outerCount, Math.abs(config.shellSpacing), config.shellCount);
+  state.outerShells = [];
   const interior = makeInteriorMask(state.paths, config);
   state.infill = makeInfill(interior, config.angle, config.infillSpacing, config);
   state.altInfill = config.alternateLayer
