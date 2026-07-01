@@ -521,21 +521,36 @@ function buildThreePreview() {
 
 function makeTubeMesh(path, centerX, centerY, y, radius, material) {
   if (path.length < 2) return null;
-  const points = simplifyPathForTube(path).map((point) => (
+  const isClosed = distance(path[0], path[path.length - 1]) <= Math.max(POINT_EPSILON, radius * 0.2);
+  const source = isClosed ? path.slice(0, -1) : path;
+  const points = simplifyPathForTube(source).map((point) => (
     new THREE.Vector3(point.x - centerX, y, point.y - centerY)
   ));
   if (points.length < 2) return null;
 
-  const curve = new THREE.CatmullRomCurve3(points, false, "centripetal", 0.08);
+  const curve = new THREE.CatmullRomCurve3(points, isClosed, "centripetal", 0.08);
   const pathLength = polylineLength(path);
-  const tubularSegments = Math.max(6, Math.min(180, Math.ceil(pathLength / 4)));
-  const radialSegments = Math.max(6, Math.min(14, Math.ceil(radius * 1.4)));
-  const geometry = new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, false);
-  return new THREE.Mesh(geometry, material);
+  const tubularSegments = Math.max(18, Math.min(1200, Math.ceil(pathLength / 1.4)));
+  const radialSegments = Math.max(14, Math.min(24, Math.ceil(radius * 4)));
+  const geometry = new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, isClosed);
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(geometry, material));
+  if (!isClosed) {
+    addTubeCap(group, points[0], radius, material);
+    addTubeCap(group, points[points.length - 1], radius, material);
+  }
+  return group;
+}
+
+function addTubeCap(group, point, radius, material) {
+  const capGeometry = new THREE.SphereGeometry(radius, 18, 12);
+  const cap = new THREE.Mesh(capGeometry, material);
+  cap.position.copy(point);
+  group.add(cap);
 }
 
 function simplifyPathForTube(path) {
-  const minDistance = 1.25;
+  const minDistance = 0.35;
   const simplified = [];
   path.forEach((point) => {
     const last = simplified[simplified.length - 1];
@@ -626,6 +641,9 @@ function clearThreeGroup(group) {
 
 function disposeObject(object) {
   if (!object) return;
+  if (object.children?.length) {
+    object.children.forEach((child) => disposeObject(child));
+  }
   if (object.geometry) object.geometry.dispose();
   const materials = Array.isArray(object.material) ? object.material : [object.material];
   materials.filter(Boolean).forEach((material) => material.dispose());
