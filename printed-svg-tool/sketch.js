@@ -7,6 +7,7 @@ let canvas;
 let state;
 let preview;
 let controls = {};
+let three = null;
 
 function setup() {
   const host = document.querySelector("#canvas-stage");
@@ -25,12 +26,17 @@ function setup() {
   };
 
   bindControls();
+  initThreePreview();
   controls.svgInput.value = state.source;
   rebuild();
 }
 
 function draw() {
   if (!preview) return;
+  if (settings().viewMode === "3d") {
+    renderThreePreview();
+    return;
+  }
 
   background(settings().bedColor);
 
@@ -51,6 +57,7 @@ function windowResized() {
   const widthTarget = Math.min(1100, Math.max(360, host.clientWidth));
   const heightTarget = Math.max(420, Math.round(widthTarget * 0.69));
   resizeCanvas(widthTarget, heightTarget);
+  resizeThreePreview();
   fitPreview();
 }
 
@@ -61,6 +68,11 @@ function bindControls() {
     render: document.querySelector("#render-button"),
     exportPng: document.querySelector("#export-png"),
     exportSvg: document.querySelector("#export-svg"),
+    resetCamera: document.querySelector("#reset-camera"),
+    viewMode: document.querySelector("#view-mode"),
+    layerCount: document.querySelector("#layer-count"),
+    layerHeight: document.querySelector("#layer-height"),
+    zScale: document.querySelector("#z-scale"),
     lineWidth: document.querySelector("#line-width"),
     lineGap: document.querySelector("#line-gap"),
     density: document.querySelector("#density"),
@@ -87,6 +99,7 @@ function bindControls() {
   });
 
   [
+    controls.viewMode,
     controls.alternateLayer,
     controls.roundedCaps,
     controls.infillPattern,
@@ -116,8 +129,12 @@ function bindControls() {
     rebuild();
   });
 
-  controls.exportPng.addEventListener("click", () => saveCanvas(canvas, "printed-svg-toolpath", "png"));
+  controls.exportPng.addEventListener("click", exportPreviewPng);
   controls.exportSvg.addEventListener("click", exportToolpathSvg);
+  controls.resetCamera.addEventListener("click", () => {
+    resetThreeCamera();
+    renderThreePreview();
+  });
   updateOutputs();
 }
 
@@ -125,6 +142,9 @@ function updateOutputs() {
   const labels = [
     [controls.lineWidth, "px"],
     [controls.lineGap, "px"],
+    [controls.layerCount, ""],
+    [controls.layerHeight, "px"],
+    [controls.zScale, "x"],
     [controls.density, "%"],
     [controls.angle, "deg"],
     [controls.infillSetback, "px"],
@@ -154,6 +174,10 @@ function settings() {
     density,
     infillSpacing,
     angle: Number(controls.angle.value),
+    viewMode: controls.viewMode.value,
+    layerCount: Number(controls.layerCount.value),
+    layerHeight: Number(controls.layerHeight.value),
+    zScale: Number(controls.zScale.value),
     infillPattern: controls.infillPattern.value,
     infillSetback: Number(controls.infillSetback.value),
     connectThreshold: Number(controls.connectThreshold.value),
@@ -198,6 +222,8 @@ function rebuildToolpaths() {
     altInfill: state.altInfill
   };
   fitPreview();
+  syncPreviewMode();
+  buildThreePreview();
 }
 
 async function parseSvgToPaths(svgText) {
@@ -334,6 +360,275 @@ function fitPreview() {
   preview.scale = Math.max(0.01, scaleFactor);
   preview.offsetX = (width - bw * preview.scale) / 2;
   preview.offsetY = (height - bh * preview.scale) / 2;
+}
+
+function syncPreviewMode() {
+  if (!controls.viewMode || !canvas || !three) return;
+  const is3d = controls.viewMode.value === "3d";
+  canvas.elt.classList.toggle("is-hidden", is3d);
+  three.host.classList.toggle("is-active", is3d);
+  if (is3d) {
+    resizeThreePreview();
+    renderThreePreview();
+  }
+}
+
+function initThreePreview() {
+  const host = document.querySelector("#three-stage");
+  if (!host || !window.THREE) return;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(38, 1100 / 760, 0.1, 5000);
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  } catch (error) {
+    console.warn("3D preview unavailable:", error);
+    return;
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  if (THREE.SRGBColorSpace) renderer.outputColorSpace = THREE.SRGBColorSpace;
+  host.appendChild(renderer.domElement);
+
+  const ambient = new THREE.HemisphereLight(0xffffff, 0xb8b4a8, 1.85);
+  scene.add(ambient);
+
+  const key = new THREE.DirectionalLight(0xffffff, 2.2);
+  key.position.set(260, 420, 320);
+  scene.add(key);
+
+  three = {
+    host,
+    scene,
+    camera,
+    renderer,
+    toolpathGroup: new THREE.Group(),
+    bed: null,
+    bounds: null,
+    orbit: {
+      theta: 0.56,
+      phi: 1.02,
+      radius: 800,
+      target: new THREE.Vector3(0, 0, 0),
+      dragging: false,
+      lastX: 0,
+      lastY: 0
+    }
+  };
+  scene.add(three.toolpathGroup);
+  attachThreeOrbitControls(renderer.domElement);
+  resizeThreePreview();
+}
+
+function resizeThreePreview() {
+  if (!three) return;
+  const rect = three.host.getBoundingClientRect();
+  const widthTarget = Math.max(320, Math.round(rect.width || width));
+  const heightTarget = Math.max(320, Math.round(rect.height || height));
+  three.renderer.setSize(widthTarget, heightTarget, false);
+  three.camera.aspect = widthTarget / heightTarget;
+  three.camera.updateProjectionMatrix();
+  renderThreePreview();
+}
+
+function buildThreePreview() {
+  if (!three || !preview) return;
+  const config = settings();
+  clearThreeGroup(three.toolpathGroup);
+  if (three.bed) {
+    three.scene.remove(three.bed);
+    disposeObject(three.bed);
+    three.bed = null;
+  }
+
+  const bounds = preview.bounds;
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+  const width3d = bounds.maxX - bounds.minX;
+  const depth3d = bounds.maxY - bounds.minY;
+  const layerStep = Math.max(0.1, config.layerHeight * config.zScale);
+  const beadRadius = Math.max(0.35, config.lineWidth / 2);
+  const beadColor = new THREE.Color(config.materialColor);
+  const altColor = new THREE.Color(mixHex(config.materialColor, "#ffffff", 0.18));
+  const shadowColor = new THREE.Color(config.shadowColor);
+
+  three.scene.background = new THREE.Color(config.bedColor);
+
+  const bedGeometry = new THREE.PlaneGeometry(width3d + config.lineWidth * 10, depth3d + config.lineWidth * 10);
+  const bedMaterial = new THREE.MeshStandardMaterial({
+    color: config.bedColor,
+    roughness: 0.92,
+    metalness: 0
+  });
+  three.bed = new THREE.Mesh(bedGeometry, bedMaterial);
+  three.bed.rotation.x = -Math.PI / 2;
+  three.bed.position.y = -beadRadius * 1.15;
+  three.scene.add(three.bed);
+
+  const material = new THREE.MeshStandardMaterial({
+    color: beadColor,
+    roughness: 0.58,
+    metalness: 0.02
+  });
+  const alternateMaterial = new THREE.MeshStandardMaterial({
+    color: altColor,
+    roughness: 0.58,
+    metalness: 0.02
+  });
+  const sideMaterial = new THREE.MeshStandardMaterial({
+    color: shadowColor,
+    roughness: 0.68,
+    metalness: 0
+  });
+
+  const pathSets = [
+    { paths: preview.altInfill, material: alternateMaterial },
+    { paths: preview.infill, material },
+    { paths: preview.shells, material },
+    { paths: preview.outerShells, material }
+  ];
+
+  for (let layer = 0; layer < config.layerCount; layer += 1) {
+    const y = layer * layerStep;
+    pathSets.forEach((set) => {
+      set.paths.forEach((path) => {
+        const mesh = makeTubeMesh(path, centerX, centerY, y, beadRadius, set.material);
+        if (mesh) three.toolpathGroup.add(mesh);
+      });
+    });
+
+    if (layer > 0 && config.layerHeight * config.zScale > beadRadius * 1.35) {
+      pathSets.slice(1).forEach((set) => {
+        set.paths.forEach((path) => {
+          const side = makeTubeMesh(path, centerX, centerY, y - layerStep * 0.48, beadRadius * 0.72, sideMaterial);
+          if (side) {
+            side.scale.y = Math.max(1, layerStep / beadRadius);
+            three.toolpathGroup.add(side);
+          }
+        });
+      });
+    }
+  }
+
+  three.bounds = {
+    width: width3d,
+    depth: depth3d,
+    height: Math.max(layerStep, (config.layerCount - 1) * layerStep + beadRadius * 2)
+  };
+  resetThreeCamera(false);
+  renderThreePreview();
+}
+
+function makeTubeMesh(path, centerX, centerY, y, radius, material) {
+  if (path.length < 2) return null;
+  const points = simplifyPathForTube(path).map((point) => (
+    new THREE.Vector3(point.x - centerX, y, point.y - centerY)
+  ));
+  if (points.length < 2) return null;
+
+  const curve = new THREE.CatmullRomCurve3(points, false, "centripetal", 0.08);
+  const pathLength = polylineLength(path);
+  const tubularSegments = Math.max(6, Math.min(180, Math.ceil(pathLength / 4)));
+  const radialSegments = Math.max(6, Math.min(14, Math.ceil(radius * 1.4)));
+  const geometry = new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, false);
+  return new THREE.Mesh(geometry, material);
+}
+
+function simplifyPathForTube(path) {
+  const minDistance = 1.25;
+  const simplified = [];
+  path.forEach((point) => {
+    const last = simplified[simplified.length - 1];
+    if (!last || distance(last, point) >= minDistance) simplified.push(point);
+  });
+  if (simplified.length === 1 && path.length > 1) simplified.push(path[path.length - 1]);
+  return simplified;
+}
+
+function resetThreeCamera(render = true) {
+  if (!three || !three.bounds) return;
+  const maxSize = Math.max(three.bounds.width, three.bounds.depth, three.bounds.height);
+  const distanceFromModel = Math.max(180, maxSize * 1.25);
+  three.orbit.theta = 0.56;
+  three.orbit.phi = 1.02;
+  three.orbit.radius = distanceFromModel * 1.28;
+  three.orbit.target.set(0, three.bounds.height * 0.2, 0);
+  three.camera.near = 0.1;
+  three.camera.far = distanceFromModel * 8;
+  updateThreeCameraFromOrbit();
+  if (render) renderThreePreview();
+}
+
+function renderThreePreview() {
+  if (!three || !three.renderer) return;
+  three.renderer.render(three.scene, three.camera);
+}
+
+function attachThreeOrbitControls(element) {
+  element.addEventListener("pointerdown", (event) => {
+    if (!three) return;
+    three.orbit.dragging = true;
+    three.orbit.lastX = event.clientX;
+    three.orbit.lastY = event.clientY;
+    element.setPointerCapture(event.pointerId);
+  });
+
+  element.addEventListener("pointermove", (event) => {
+    if (!three?.orbit.dragging) return;
+    const dx = event.clientX - three.orbit.lastX;
+    const dy = event.clientY - three.orbit.lastY;
+    three.orbit.lastX = event.clientX;
+    three.orbit.lastY = event.clientY;
+    three.orbit.theta -= dx * 0.008;
+    three.orbit.phi = constrain(three.orbit.phi + dy * 0.006, 0.18, Math.PI - 0.18);
+    updateThreeCameraFromOrbit();
+    renderThreePreview();
+  });
+
+  element.addEventListener("pointerup", (event) => {
+    if (!three) return;
+    three.orbit.dragging = false;
+    if (element.hasPointerCapture(event.pointerId)) element.releasePointerCapture(event.pointerId);
+  });
+
+  element.addEventListener("pointercancel", () => {
+    if (three) three.orbit.dragging = false;
+  });
+
+  element.addEventListener("wheel", (event) => {
+    if (!three) return;
+    event.preventDefault();
+    three.orbit.radius = constrain(three.orbit.radius * (1 + event.deltaY * 0.0012), 80, 2600);
+    updateThreeCameraFromOrbit();
+    renderThreePreview();
+  }, { passive: false });
+}
+
+function updateThreeCameraFromOrbit() {
+  if (!three) return;
+  const orbit = three.orbit;
+  const sinPhi = Math.sin(orbit.phi);
+  three.camera.position.set(
+    orbit.target.x + orbit.radius * sinPhi * Math.sin(orbit.theta),
+    orbit.target.y + orbit.radius * Math.cos(orbit.phi),
+    orbit.target.z + orbit.radius * sinPhi * Math.cos(orbit.theta)
+  );
+  three.camera.lookAt(orbit.target);
+  three.camera.updateProjectionMatrix();
+}
+
+function clearThreeGroup(group) {
+  while (group.children.length) {
+    const child = group.children.pop();
+    disposeObject(child);
+  }
+}
+
+function disposeObject(object) {
+  if (!object) return;
+  if (object.geometry) object.geometry.dispose();
+  const materials = Array.isArray(object.material) ? object.material : [object.material];
+  materials.filter(Boolean).forEach((material) => material.dispose());
 }
 
 function makeShells(paths, count, offsetStep, startIndex = 0) {
@@ -682,6 +977,19 @@ function drawPolyline(path, ox, oy) {
   endShape();
 }
 
+function exportPreviewPng() {
+  const config = settings();
+  if (config.viewMode === "3d" && three?.renderer) {
+    renderThreePreview();
+    const link = document.createElement("a");
+    link.href = three.renderer.domElement.toDataURL("image/png");
+    link.download = "printed-svg-toolpath-3d.png";
+    link.click();
+    return;
+  }
+  saveCanvas(canvas, "printed-svg-toolpath", "png");
+}
+
 function exportToolpathSvg() {
   const config = settings();
   const bounds = preview.bounds;
@@ -743,6 +1051,14 @@ function midpoint(a, b) {
 
 function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function polylineLength(path) {
+  let length = 0;
+  for (let i = 1; i < path.length; i += 1) {
+    length += distance(path[i - 1], path[i]);
+  }
+  return length;
 }
 
 function normalizeVector(vector) {

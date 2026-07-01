@@ -46,14 +46,42 @@ textarea {
 }
 
 #canvas-stage {
+  position: relative;
   width: 100%;
   max-width: 1120px;
 }
 
-canvas {
+#canvas-stage > canvas,
+#three-stage {
+  aspect-ratio: 1100 / 760;
+  min-height: 420px;
+}
+
+#canvas-stage > canvas {
   display: block;
   width: 100% !important;
   height: auto !important;
+}
+
+#three-stage {
+  display: none;
+  overflow: hidden;
+  width: 100%;
+  border-radius: 0;
+}
+
+#three-stage.is-active {
+  display: block;
+}
+
+#three-stage canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.is-hidden {
+  display: none !important;
 }
 
 .panel {
@@ -182,10 +210,11 @@ input[type="color"] {
 
 .actions {
   margin-top: auto;
+  flex-wrap: wrap;
 }
 
 button {
-  flex: 1 1 0;
+  flex: 1 1 calc(50% - 5px);
   height: 36px;
   border: 1px solid var(--ink);
   border-radius: 6px;

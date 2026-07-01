@@ -4,6 +4,7 @@ p5.js prototype that turns filled SVG artwork into a 3D-printer-style toolpath p
 
 - Paste or upload an SVG.
 - Adjust nozzle width, infill density, infill angle, perimeter count, perimeter offset, and simulated layer offset.
+- Switch between 2D export preview and a 3D stacked-layer preview with drag orbit and wheel zoom.
 - Export PNG or editable SVG toolpaths.
 
 Run locally from the workspace root:

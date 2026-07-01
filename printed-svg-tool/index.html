@@ -9,7 +9,9 @@
 <body>
   <main class="app">
     <section class="stage-wrap" aria-label="3D print preview">
-      <div id="canvas-stage"></div>
+      <div id="canvas-stage">
+        <div id="three-stage" aria-label="3D stacked layer preview"></div>
+      </div>
     </section>
 
     <aside class="panel" aria-label="Controls">
@@ -29,6 +31,32 @@
       </label>
 
       <div class="grid-two">
+        <label class="control">
+          <span>View</span>
+          <select id="view-mode">
+            <option value="2d" selected>2D</option>
+            <option value="3d">3D</option>
+          </select>
+        </label>
+
+        <label class="control">
+          <span>Layers</span>
+          <input id="layer-count" type="range" min="1" max="40" step="1" value="8">
+          <output for="layer-count"></output>
+        </label>
+
+        <label class="control">
+          <span>Layer height</span>
+          <input id="layer-height" type="range" min="1" max="18" step="0.5" value="5">
+          <output for="layer-height"></output>
+        </label>
+
+        <label class="control">
+          <span>Z scale</span>
+          <input id="z-scale" type="range" min="0.25" max="4" step="0.05" value="1.5">
+          <output for="z-scale"></output>
+        </label>
+
         <label class="control">
           <span>Nozzle</span>
           <input id="line-width" type="range" min="1" max="48" step="0.5" value="7">
@@ -115,6 +143,7 @@
 
       <div class="actions">
         <button id="render-button" type="button">Render</button>
+        <button id="reset-camera" type="button">Reset camera</button>
         <button id="export-png" type="button">PNG</button>
         <button id="export-svg" type="button">SVG</button>
       </div>
@@ -133,6 +162,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/clipper-lib@6.4.2/clipper.js"></script>
-  <script src="./sketch.js?v=20260701-5"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+  <script src="./sketch.js?v=20260701-6"></script>
 </body>
 </html>
