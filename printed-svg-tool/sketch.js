@@ -33,7 +33,6 @@ function draw() {
   if (!preview) return;
 
   background(settings().bedColor);
-  drawBed();
 
   push();
   translate(preview.offsetX, preview.offsetY);
@@ -651,21 +650,6 @@ function pointInPolygon(point, path) {
     if (point.x < x) inside = !inside;
   }
   return inside;
-}
-
-function drawBed() {
-  const config = settings();
-  push();
-  noFill();
-  stroke(20, 20, 20, 20);
-  strokeWeight(1);
-  const grid = 42;
-  for (let x = -grid; x < width + grid; x += grid) line(x, 0, x, height);
-  for (let y = -grid; y < height + grid; y += grid) line(0, y, width, y);
-  fill(config.materialColor + "16");
-  noStroke();
-  rect(18, 18, width - 36, height - 36, 8);
-  pop();
 }
 
 function drawPrintedLayer(paths, isAlternate) {
