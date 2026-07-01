@@ -529,13 +529,35 @@ function makeTurnPoints(a, b, previous, next, maskPaths, threshold) {
       x: center.x + normal.x * radius * Math.cos(theta) + tangent.x * radius * Math.sin(theta),
       y: center.y + normal.y * radius * Math.cos(theta) + tangent.y * radius * Math.sin(theta)
     };
-    if (!pointInCompound(point, maskPaths)) return null;
+    if (!pointInCompound(point, maskPaths)) {
+      return makeCompactTurnPoints(a, b, next, maskPaths);
+    }
     points.push(point);
   }
   if (next) {
     const outgoing = normalizeVector({ x: next.x - b.x, y: next.y - b.y });
     if (outgoing && dot(tangent, outgoing) > -0.5) return null;
   }
+  return points;
+}
+
+function makeCompactTurnPoints(a, b, next, maskPaths) {
+  if (next) {
+    const incomingBridge = normalizeVector({ x: b.x - a.x, y: b.y - a.y });
+    const outgoing = normalizeVector({ x: next.x - b.x, y: next.y - b.y });
+    if (incomingBridge && outgoing && Math.abs(dot(incomingBridge, outgoing)) > 0.82) return null;
+  }
+
+  const length = distance(a, b);
+  const steps = Math.max(2, Math.ceil(length / Math.max(2, SAMPLE_STEP)));
+  const points = [];
+
+  for (let i = 1; i <= steps; i += 1) {
+    const point = lerpPoint(a, b, i / steps);
+    if (!pointInCompound(point, maskPaths)) return null;
+    points.push(point);
+  }
+
   return points;
 }
 
