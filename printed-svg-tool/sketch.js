@@ -518,6 +518,18 @@ function makeTurnPoints(a, b, previous, next, maskPaths, threshold) {
   const bridgeLength = Math.hypot(bridge.x, bridge.y);
   if (bridgeLength < POINT_EPSILON) return [{ ...b }];
 
+  const outgoing = next ? normalizeVector({ x: next.x - b.x, y: next.y - b.y }) : null;
+  if (outgoing && dot(tangent, outgoing) > -0.5) return null;
+
+  const fullTurn = makeSemicircleTurnPoints(a, b, tangent, maskPaths);
+  if (fullTurn) return fullTurn;
+
+  return makeCompactTurnPoints(a, b, tangent, outgoing, maskPaths);
+}
+
+function makeSemicircleTurnPoints(a, b, tangent, maskPaths) {
+  const bridgeLength = distance(a, b);
+  const bridge = { x: b.x - a.x, y: b.y - a.y };
   const normal = normalizeVector(bridge);
   const radius = bridgeLength / 2;
   const center = midpoint(a, b);
@@ -529,36 +541,54 @@ function makeTurnPoints(a, b, previous, next, maskPaths, threshold) {
       x: center.x + normal.x * radius * Math.cos(theta) + tangent.x * radius * Math.sin(theta),
       y: center.y + normal.y * radius * Math.cos(theta) + tangent.y * radius * Math.sin(theta)
     };
-    if (!pointInCompound(point, maskPaths)) {
-      return makeCompactTurnPoints(a, b, next, maskPaths);
-    }
+    if (!pointInCompound(point, maskPaths)) return null;
     points.push(point);
-  }
-  if (next) {
-    const outgoing = normalizeVector({ x: next.x - b.x, y: next.y - b.y });
-    if (outgoing && dot(tangent, outgoing) > -0.5) return null;
   }
   return points;
 }
 
-function makeCompactTurnPoints(a, b, next, maskPaths) {
-  if (next) {
-    const incomingBridge = normalizeVector({ x: b.x - a.x, y: b.y - a.y });
-    const outgoing = normalizeVector({ x: next.x - b.x, y: next.y - b.y });
-    if (incomingBridge && outgoing && Math.abs(dot(incomingBridge, outgoing)) > 0.82) return null;
-  }
-
+function makeCompactTurnPoints(a, b, tangent, outgoing, maskPaths) {
+  if (outgoing && dot(tangent, outgoing) > -0.5) return null;
   const length = distance(a, b);
-  const steps = Math.max(2, Math.ceil(length / Math.max(2, SAMPLE_STEP)));
-  const points = [];
+  const steps = Math.max(8, Math.ceil((Math.PI * length) / Math.max(2, SAMPLE_STEP)));
+  const handleFactors = [0.9, 0.72, 0.56, 0.42, 0.3];
 
-  for (let i = 1; i <= steps; i += 1) {
-    const point = lerpPoint(a, b, i / steps);
-    if (!pointInCompound(point, maskPaths)) return null;
-    points.push(point);
+  for (const factor of handleFactors) {
+    const handle = (length / 2) * factor;
+    const c1 = {
+      x: a.x + tangent.x * handle,
+      y: a.y + tangent.y * handle
+    };
+    const c2 = {
+      x: b.x + tangent.x * handle,
+      y: b.y + tangent.y * handle
+    };
+    const points = [];
+    let fits = true;
+
+    for (let i = 1; i <= steps; i += 1) {
+      const point = cubicBezierPoint(a, c1, c2, b, i / steps);
+      if (!pointInCompound(point, maskPaths)) {
+        fits = false;
+        break;
+      }
+      points.push(point);
+    }
+
+    if (fits) return points;
   }
 
-  return points;
+  return null;
+}
+
+function cubicBezierPoint(a, b, c, d, t) {
+  const inv = 1 - t;
+  const inv2 = inv * inv;
+  const t2 = t * t;
+  return {
+    x: inv2 * inv * a.x + 3 * inv2 * t * b.x + 3 * inv * t2 * c.x + t2 * t * d.x,
+    y: inv2 * inv * a.y + 3 * inv2 * t * b.y + 3 * inv * t2 * c.y + t2 * t * d.y
+  };
 }
 
 function clipLineToMask(a, b, paths) {
