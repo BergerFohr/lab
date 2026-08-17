@@ -70,7 +70,7 @@ function drawConstruction(cx, cy, rx, ry, angles) {
 
   for (const angle of angles) {
     const start = pointOnEllipse(cx, cy, rx, ry, angle);
-    const end = pointOnCanvasEdge(cx, cy, angle);
+    const end = pointOnCanvasEdgeFromVector(cx, cy, start.x - cx, start.y - cy);
     line(start.x, start.y, end.x, end.y);
   }
 }
@@ -115,6 +115,10 @@ function pointOnEllipse(cx, cy, rx, ry, angle) {
 function pointOnCanvasEdge(cx, cy, angle) {
   const dx = cos(angle);
   const dy = sin(angle);
+  return pointOnCanvasEdgeFromVector(cx, cy, dx, dy);
+}
+
+function pointOnCanvasEdgeFromVector(cx, cy, dx, dy) {
   const tx = dx > 0 ? (width - cx) / dx : dx < 0 ? -cx / dx : Infinity;
   const ty = dy > 0 ? (height - cy) / dy : dy < 0 ? -cy / dy : Infinity;
   const distance = min(tx, ty);
