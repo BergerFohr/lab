@@ -39,22 +39,22 @@ function distributedAngles(cx, cy, rx, ry) {
   const nx = constrain((pointer.x - cx) / rx, -1, 1);
   const ny = constrain((pointer.y - cy) / ry, -1, 1);
   const pull = sqrt(nx * nx + ny * ny);
-  const direction = atan2(ny, nx || 0.0001);
+  const baseAngle = -HALF_PI;
   const strength = smoothstep(0.04, 0.95, pull) * 0.72;
   const weights = [];
   let total = 0;
 
   for (let i = 0; i < SEGMENT_COUNT; i++) {
-    const sample = direction + (i + 0.5) * TWO_PI / SEGMENT_COUNT;
-    const wave = 0.5 + 0.5 * cos(sample - direction);
-    const counterwave = 0.5 + 0.5 * cos(sample - direction - PI * 0.72);
-    const weight = max(0.22, 1 + strength * (wave * 1.4 - counterwave * 0.72));
+    const sample = baseAngle + (i + 0.5) * TWO_PI / SEGMENT_COUNT;
+    const pointerPull = nx * cos(sample) + ny * sin(sample);
+    const crossPull = nx * cos(sample - PI * 0.72) + ny * sin(sample - PI * 0.72);
+    const weight = max(0.22, 1 + strength * (pointerPull * 1.25 - crossPull * 0.48));
     weights.push(weight);
     total += weight;
   }
 
   const angles = [];
-  let angle = direction + PI - HALF_PI / 2;
+  let angle = baseAngle;
   for (const weight of weights) {
     angles.push(angle);
     angle += TWO_PI * (weight / total);
