@@ -26,7 +26,7 @@ function draw() {
   const outerRx = width * 0.4;
   const outerRy = height * 0.4;
   const innerRy = height * 0.25;
-  const innerRx = outerRx * (innerRy / outerRy);
+  const innerRx = innerRy;
   const angles = distributedAngles(cx, cy, outerRx, outerRy);
 
   drawEllipse(cx, cy, outerRx, outerRy, '#8f8f89', 1);
