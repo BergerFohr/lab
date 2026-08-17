@@ -26,7 +26,7 @@ function draw() {
 
   const outerRx = width * 0.4;
   const outerRy = height * 0.4;
-  const innerR = max(0, min(height * 0.25, outerRx, outerRy) - ACTIVE_STROKE_WEIGHT);
+  const innerR = max(0, min(height * 0.2, outerRx, outerRy) - ACTIVE_STROKE_WEIGHT);
   const innerRx = innerR;
   const innerRy = innerR;
   const angles = distributedAngles(cx, cy, outerRx, outerRy);
