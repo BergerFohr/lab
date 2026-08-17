@@ -69,7 +69,7 @@ function drawConstruction(cx, cy, rx, ry, angles) {
   noFill();
 
   for (const angle of angles) {
-    const p = pointOnEllipse(cx, cy, rx, ry, angle);
+    const p = pointOnCanvasEdge(cx, cy, angle);
     line(cx, cy, p.x, p.y);
   }
 }
@@ -108,6 +108,19 @@ function pointOnEllipse(cx, cy, rx, ry, angle) {
   return {
     x: cx + cos(angle) * rx,
     y: cy + sin(angle) * ry
+  };
+}
+
+function pointOnCanvasEdge(cx, cy, angle) {
+  const dx = cos(angle);
+  const dy = sin(angle);
+  const tx = dx > 0 ? (width - cx) / dx : dx < 0 ? -cx / dx : Infinity;
+  const ty = dy > 0 ? (height - cy) / dy : dy < 0 ? -cy / dy : Infinity;
+  const distance = min(tx, ty);
+
+  return {
+    x: cx + dx * distance,
+    y: cy + dy * distance
   };
 }
 
