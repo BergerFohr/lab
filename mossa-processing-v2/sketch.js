@@ -30,7 +30,7 @@ function draw() {
   const angles = distributedAngles(cx, cy, outerRx, outerRy);
 
   drawEllipse(cx, cy, outerRx, outerRy, '#8f8f89', 1);
-  drawConstruction(cx, cy, outerRx, outerRy, angles);
+  drawConstruction(cx, cy, innerRx, innerRy, angles);
   drawActiveForm(cx, cy, innerRx, innerRy, angles);
   drawCenterMark(cx, cy);
 }
@@ -69,8 +69,9 @@ function drawConstruction(cx, cy, rx, ry, angles) {
   noFill();
 
   for (const angle of angles) {
-    const p = pointOnCanvasEdge(cx, cy, angle);
-    line(cx, cy, p.x, p.y);
+    const start = pointOnEllipse(cx, cy, rx, ry, angle);
+    const end = pointOnCanvasEdge(cx, cy, angle);
+    line(start.x, start.y, end.x, end.y);
   }
 }
 
