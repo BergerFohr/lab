@@ -2,8 +2,9 @@
 
 Fresh interactive p5 processing graphic for Mossa.
 
-- Press `1` through `6` to switch movement modes.
-- Press `R` or click the small center control to randomize color.
-- Click the canvas to reseed the structure.
+- Full-screen pure-code p5 sketch.
+- Fixed oval construction at 80% of the viewport.
+- Eight radial segment dividers redistribute with mouse or touch movement.
+- Grey construction lines and black active inner lines use 1px/2px drafting weights.
 
 [View experiment ->](https://bergerfohr.github.io/lab/mossa-processing-v2/)
