@@ -1,5 +1,6 @@
 const SEGMENT_COUNT = 8;
 const MAX_PIXEL_RATIO = 2;
+const ACTIVE_STROKE_WEIGHT = 2;
 
 let pointer;
 
@@ -25,8 +26,9 @@ function draw() {
 
   const outerRx = width * 0.4;
   const outerRy = height * 0.4;
-  const innerRy = height * 0.25;
-  const innerRx = innerRy;
+  const innerR = max(0, min(height * 0.25, outerRx, outerRy) - ACTIVE_STROKE_WEIGHT);
+  const innerRx = innerR;
+  const innerRy = innerR;
   const angles = distributedAngles(cx, cy, outerRx, outerRy);
 
   drawEllipse(cx, cy, outerRx, outerRy, '#8f8f89', 1);
@@ -77,7 +79,7 @@ function drawConstruction(cx, cy, rx, ry, angles) {
 
 function drawActiveForm(cx, cy, rx, ry, angles) {
   stroke('#101010');
-  strokeWeight(2);
+  strokeWeight(ACTIVE_STROKE_WEIGHT);
   noFill();
 
   for (const angle of angles) {
@@ -101,7 +103,7 @@ function drawEllipse(cx, cy, rx, ry, ink, weight) {
 
 function drawCenterMark(cx, cy) {
   stroke('#101010');
-  strokeWeight(2);
+  strokeWeight(ACTIVE_STROKE_WEIGHT);
   point(cx, cy);
 }
 
