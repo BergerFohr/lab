@@ -29,7 +29,6 @@ function draw() {
   const innerRx = outerRx * (innerRy / outerRy);
   const angles = distributedAngles(cx, cy, outerRx, outerRy);
 
-  drawPaperGrain();
   drawEllipse(cx, cy, outerRx, outerRy, '#8f8f89', 1);
   drawConstruction(cx, cy, outerRx, outerRy, angles);
   drawActiveForm(cx, cy, innerRx, innerRy, angles);
@@ -84,14 +83,6 @@ function drawActiveForm(cx, cy, rx, ry, angles) {
     const p = pointOnEllipse(cx, cy, rx, ry, angle);
     line(cx, cy, p.x, p.y);
   }
-
-  beginShape();
-  for (let i = 0; i <= 160; i++) {
-    const a = map(i, 0, 160, 0, TWO_PI);
-    const p = pointOnEllipse(cx, cy, rx, ry, a);
-    vertex(p.x, p.y);
-  }
-  endShape();
 }
 
 function drawEllipse(cx, cy, rx, ry, ink, weight) {
@@ -111,20 +102,6 @@ function drawCenterMark(cx, cy) {
   stroke('#101010');
   strokeWeight(2);
   point(cx, cy);
-}
-
-function drawPaperGrain() {
-  stroke('#deded8');
-  strokeWeight(1);
-  const step = max(28, min(width, height) * 0.045);
-
-  for (let x = width / 2 - width * 0.4; x <= width / 2 + width * 0.4; x += step) {
-    line(x, height * 0.5 - 4, x, height * 0.5 + 4);
-  }
-
-  for (let y = height / 2 - height * 0.4; y <= height / 2 + height * 0.4; y += step) {
-    line(width * 0.5 - 4, y, width * 0.5 + 4, y);
-  }
 }
 
 function pointOnEllipse(cx, cy, rx, ry, angle) {
